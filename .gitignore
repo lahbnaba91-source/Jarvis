@@ -1,0 +1,5 @@
+# The vault now lives in its own repo (hq-vault), synced separately via
+# GitHub Gitless Sync. Kept on disk here for the local AI session, not tracked.
+HQ/
+
+.DS_Store
