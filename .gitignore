@@ -2,4 +2,45 @@
 # GitHub Gitless Sync. Kept on disk here for the local AI session, not tracked.
 HQ/
 
+# Vendored ai-visualizer (jaredrhod/ai-visualizer) and its runtime state —
+# third-party tool, not our code, updated via its own update.sh.
+ai-visualizer/
+.voice-bus/
+
+# jarvis-voice: server.py is ours and tracked, but the venv and any
+# recording scratch files are not.
+jarvis-voice/.venv/
+jarvis-voice/tmp/
+
+# Hubspace light control: hubspace_light.py is ours and tracked, but the
+# venv and the cached refresh-token (a live credential) are not.
+scripts/hubspace/.venv/
+scripts/hubspace/.state/
+
+# Spotify playback control: spotify_play.py is ours and tracked, but the
+# client secret and cached refresh-token (live credentials) are not.
+scripts/spotify/.state/
+
+# Light-show cue scheduler: analyze_track.py + the generated cues/*.json
+# are ours and tracked (just timing/color metadata, no audio), but the
+# per-run latency log and calibration result are local runtime state.
+scripts/lightshow/state/
+
+# Vendored barehands (jaredrhod/barehands) — third-party tool, not our
+# code, updated via its own update.sh.
+barehands/
+
+# jarvis-voice: generated packaging metadata from `pip install -e .`, not
+# source — regenerates on any fresh env.
+jarvis-voice/jarvis_voice.egg-info/
+
+# Claude Code local state: settings.local.json carries this machine's own
+# permission allowlist, scheduled_tasks.lock is a live PID/session lock —
+# both go stale the instant they're read on a different machine or session.
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Compiled Python bytecode cache — regenerates automatically, never source.
+__pycache__/
+
 .DS_Store
