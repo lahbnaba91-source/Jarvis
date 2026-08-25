@@ -97,12 +97,18 @@ async def run(action: str, args: list[str]) -> dict:
 
             if action == "white":
                 # the 4-finger gesture's actual color -- matches how Luis
-                # normally runs the lamp (white, 3600K, full brightness)
+                # normally runs the lamp (white, 3600K, full brightness).
+                # Optional temperature arg (2026-08-25, added for the
+                # ROCK ON real-stop revert in barehands/server.py) can
+                # override the 3600K default without touching every other
+                # caller -- in practice that revert calls "white" with no
+                # arg too, since a live read confirmed 3600K is correct.
+                temperature = int(args[0]) if args else 3600
                 await bridge.lights.set_state(
                     light_id, on=True, color_mode="white",
-                    temperature=3600, brightness=100)
+                    temperature=temperature, brightness=100)
                 return {"name": name, "on": True, "color_mode": "white",
-                        "color_temp_k": 3600, "brightness": 100}
+                        "color_temp_k": temperature, "brightness": 100}
 
             if action == "set":
                 # set <r> <g> <b> <brightness 0-100> -- the light-show driver's
