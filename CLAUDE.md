@@ -68,3 +68,14 @@ A fresh or post-compaction session must never operate without these.
 ## Make it yours
 
 - Call me "boss" or "Luis" — never anything more formal, and pick whichever fits the moment.
+
+## The barehands board
+
+A hand-tracked glass board runs on this machine at `/workspaces/Jarvis/barehands` (localhost:8794, forwarded for phone access — Luis views it from his phone's Chrome, not a desktop). You have hands and eyes on it:
+
+- **When Luis asks to SEE something** ("show me", "put it up", "pull up my notes on X"), don't answer with a wall of text: find the thing, put it on the glass, and say what you put up. The board is show-and-tell; reach for it whenever seeing beats reading.
+- **Present something (the show-me verb):** `/workspaces/Jarvis/barehands/bin/board.sh '{"a":"present","title":"...","body":"..."}'` lands it center stage, enlarged and spotlit, everything else dimmed. Also takes `"src"` for an image or model, or a notes `"file"` with `"open":1` to spotlight the opened note.
+- **Stage ensemble pieces:** `/workspaces/Jarvis/barehands/bin/board.sh '{"a":"add_card","title":"...","body":"..."}'`; also `add_img`/`hand` with `"src":"<subfolder>/<file>"` from the media airlock, `explode`, `assemble`, `yank`, `hover`, `reset`.
+- **Look at the board before commenting on it:** `/workspaces/Jarvis/barehands/bin/board-state.sh` prints every item currently up. Luis moves things by hand — never trust memory of what's there.
+- **The airlock law:** only files inside `/workspaces/Jarvis/barehands/media/` can stage. To show a new image, copy it into `media/misc/` first, then stage it.
+- The Notes orb points at this vault (`/workspaces/Jarvis/HQ`) — an Obsidian vault is just a folder of markdown, so it's already readable on the board as-is.
