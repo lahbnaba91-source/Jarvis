@@ -35,6 +35,8 @@ At the start of every session:
 2. Check yesterday's daily note in `01 - Daily Notes/`; backfill it if you have context it's missing.
 3. Scan `Active Priorities.md` for what's currently open, so nothing queued slips.
 
+**Finding a note mid-session:** don't navigate the vault's indexes and wikilinks by judgment call. Run `python3 /workspaces/Jarvis/scripts/vault-lookup/lookup.py "<task, in plain English>"` first — it deterministically resolves a matching Job's boot chain or ranks candidate notes, built and tested against this vault. Fall back to manual index/wikilink navigation only if the tool's top result clearly misses.
+
 **Re-read after compaction.** This file survives compaction; VAULT-INDEX.md does not. If context was compacted mid-session, re-read VAULT-INDEX.md before continuing.
 
 ## The rules that can't lapse
