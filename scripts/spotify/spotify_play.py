@@ -87,7 +87,7 @@ def get_access_token() -> str:
     return data["access_token"]
 
 
-DEFAULT_DEVICE_ID = "277519e0-b3c3-4ed7-bbf2-e4507f550ba6_amzn_1"   # luis's Echo Dot
+DEFAULT_DEVICE_ID = "18e2a2e0-cfb7-415c-94ba-1366c00378fe_amzn_1"   # luis's Echo Dot
 
 
 def play_uri(uri: str, device_id: str = DEFAULT_DEVICE_ID) -> dict:
