@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<!--
+ai-visualizer: give your AI agent a face.
+Copyright (C) 2026 Jared Rhodenizer
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Shadow Puppet</title>
+<style>
+  @font-face{font-family:"VT323";src:url("../../assets/VT323-Regular.ttf")}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden;cursor:none}
+  #stage{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+  #hud{position:fixed;left:18px;bottom:16px;font:12px/1.4 'VT323',monospace;
+       font-size:16px;color:rgb(0,190,60);letter-spacing:.05em;
+       text-shadow:0 0 6px rgba(0,255,90,.35);pointer-events:none;z-index:5}
+  #cam-note{position:fixed;top:18px;right:18px;font:14px 'VT323',monospace;
+       color:#6a7a76;letter-spacing:.1em;text-align:right;max-width:38vw;
+       pointer-events:none;z-index:5;opacity:0;transition:opacity .6s}
+  #cam-note.on{opacity:.85}
+  video{display:none}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<video id="cam" autoplay playsinline muted></video>
+<div id="hud"></div>
+<div id="cam-note"></div>
+
+<script src="../../core.js"></script>
+<script type="module">
+"use strict";
+/* ============================================================
+   SHADOW PUPPET  ·  the live head-tracked shadow-cast face
+
+   Your webcam feeds two live MediaPipe models:
+     FaceLandmarker   -> head position (from interocular distance
+                          + eye midpoint), used to build a real
+                          off-axis (asymmetric-frustum) projection
+                          matrix for the three.js camera — the
+                          classic head-coupled-perspective trick,
+                          so the scene actually parallaxes as you
+                          move, like looking through a window.
+     ImageSegmenter    -> a per-pixel person-confidence mask. Blown
+                          up and blurred, it becomes a feathered
+                          alpha map.
+
+   That RGB + feathered-alpha pair becomes the alphaMap/map of a
+   floating cutout plane (the "3D object") in a small three.js
+   room. A spotlight sits behind and above you, aimed down and
+   forward through the cutout onto the floor — so your own
+   silhouette stretches out across the ground toward the camera,
+   the way a low room light throws a long shadow. VSM shadows keep
+   that shadow's edge soft, echoing the feathered cutout above it.
+
+   No camera / no WebGL / tracking fails to load -> a procedural
+   phantom silhouette breathes in your place, driven by the same
+   AV.state bus every other face uses, so the gallery demo and a
+   denied permission both still show something alive.
+
+   State -> the room's mood (light color/behavior), same bus as
+   every other face:
+     idle       dim, cool, slow breathing
+     listening  warm amber, tightens toward you
+     thinking   restless — the spot sweeps like it's searching
+     speaking   intensity rides AV.env, the shadow pulses with it
+     alert      hard red, fast pulse
+
+   Keys: F = fullscreen.
+   ============================================================ */
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { FilesetResolver, FaceLandmarker, ImageSegmenter }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+AV.init({ sound: true });
+AV.ready(a => { document.title = a.name + " Shadow Puppet"; });
+
+const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const FACE_MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const SEG_MODEL  = "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite";
+const EYE_DIST_M = 0.063;          // average human interocular distance
+const MASK_BLUR_PX = 10;           // feather radius on the segmentation mask
+const L_EYE = 263, R_EYE = 33;     // MediaPipe face-mesh outer eye-corner indices
+
+const RED = [255, 46, 46];
+const STATE_LIGHT = {              // [r,g,b] key-light color per bus state
+  idle:      [140, 200, 235],
+  listening: [255, 176, 64],
+  thinking:  [120, 235, 255],
+  speaking:  [200, 255, 210],
+};
+
+/* --------------------------- three.js room --------------------------- */
+const canvas = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.VSMShadowMap;   // blurrable shadow edge -> feathered shadow
+
+const ROOM_GRAY = 0x8a8a8a;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x6e6e6e);
+scene.fog = new THREE.Fog(0x6e6e6e, 6, 15);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 40);
+camera.position.set(0, 0.15, 2.4);
+
+const fill = new THREE.HemisphereLight(0xbfbfbf, 0x3a3a3a, 0.55);
+scene.add(fill);
+
+const key = new THREE.SpotLight(0xffffff, 0, 14, Math.PI / 5.2, 0.55, 1.4);
+key.position.set(0.9, 2.6, -2.6);          // behind + above the cutout
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.camera.near = 0.5;
+key.shadow.camera.far = 12;
+key.shadow.bias = -0.0009;
+key.shadow.radius = 6;                     // VSM blur radius -> the feather
+key.shadow.blurSamples = 16;
+scene.add(key, key.target);
+key.target.position.set(-0.15, -0.6, 0.4); // aimed down/forward, past the cutout, toward the viewer
+
+// the room: one big enclosing box (floor, ceiling, three walls, seen from
+// inside via BackSide) in a single flat gray — nothing in it but you and
+// your shadow.
+const room = new THREE.Mesh(
+  new THREE.BoxGeometry(16, 5, 12),
+  new THREE.MeshStandardMaterial({ color: ROOM_GRAY, roughness: 1, metalness: 0, side: THREE.BackSide })
+);
+room.position.set(0, 1.3, -2.5);
+room.receiveShadow = true;
+scene.add(room);
+
+// the cutout "3D object": camera RGB (map) masked by the feathered
+// segmentation alpha (alphaMap) on a single plane, lit + shadow-casting
+const rgbCanvas = document.createElement("canvas");
+const maskCanvas = document.createElement("canvas");
+const rgbTex = new THREE.CanvasTexture(rgbCanvas);
+const maskTex = new THREE.CanvasTexture(maskCanvas);
+rgbTex.colorSpace = THREE.SRGBColorSpace;
+
+const cutoutMat = new THREE.MeshStandardMaterial({
+  map: rgbTex, alphaMap: maskTex, transparent: true, alphaTest: 0.12,
+  side: THREE.DoubleSide, roughness: 0.9, metalness: 0,
+});
+const cutout = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.2, 1, 1), cutoutMat);
+cutout.position.set(0, -0.1, -1.5);
+cutout.castShadow = true;
+cutout.visible = false;             // shown once the first real frame lands
+scene.add(cutout);
+
+/* --------------------- phantom (no-camera fallback) --------------------- */
+// A soft breathing humanoid blob so demo mode / a denied permission still
+// shows something alive, riding the exact same AV bus as every other face.
+const phantomMat = new THREE.MeshStandardMaterial({
+  color: 0x0c1210, roughness: 1, metalness: 0, transparent: true, opacity: 0.92,
+});
+const phantom = new THREE.Group();
+const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.55, 6, 12), phantomMat);
+torso.position.y = 0.05; torso.castShadow = true;
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 16), phantomMat);
+head.position.y = 0.62; head.castShadow = true;
+phantom.add(torso, head);
+phantom.position.set(0, -0.1, -1.5);
+scene.add(phantom);
+
+addEventListener("resize", () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+});
+renderer.setSize(innerWidth, innerHeight);
+
+/* --------------------------- off-axis projection --------------------------- */
+// Robert Kooima's generalized-perspective / "fish-tank VR" trick: build an
+// asymmetric frustum from the viewer's real head position relative to the
+// screen, so the render itself parallaxes with you, like looking through a
+// window rather than at a flat picture. headPos is in meters, screen-relative
+// (x/y about center, z = distance out of the screen toward you).
+const SCREEN_W_M = 0.7, SCREEN_H_M = 0.4;   // approximate physical screen size
+function applyOffAxisProjection(cam, headPos) {
+  const n = 0.05, f = 40;
+  const z = Math.max(0.15, headPos.z);
+  const scale = n / z;
+  const l = (-SCREEN_W_M / 2 - headPos.x) * scale;
+  const r = ( SCREEN_W_M / 2 - headPos.x) * scale;
+  const b = (-SCREEN_H_M / 2 - headPos.y) * scale;
+  const t = ( SCREEN_H_M / 2 - headPos.y) * scale;
+  cam.projectionMatrix.makePerspective(l, r, b, t, n, f);
+  cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+  cam.position.set(headPos.x * 1.6, headPos.y * 1.6 + 0.15, 2.4);
+  cam.lookAt(0, -0.05, -1.5);
+  cam.updateMatrixWorld(true);
+}
+function resetProjection(cam) {
+  cam.aspect = innerWidth / innerHeight;
+  cam.updateProjectionMatrix();
+}
+
+/* ------------------------------ webcam + models ------------------------------ */
+const video = document.getElementById("cam");
+const hud = document.getElementById("hud");
+const camNote = document.getElementById("cam-note");
+let faceLandmarker = null, imageSegmenter = null, tracking = false;
+let camReady = false, lastHead = { x: 0, y: 0, z: 0.55 };
+let smoothHead = { x: 0, y: 0, z: 0.55 };
+
+function note(text, on) {
+  camNote.textContent = text;
+  camNote.classList.toggle("on", !!on);
+}
+
+async function startTracking() {
+  if (AV.demo) { note("DEMO MODE — PHANTOM ONLY", true); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: "user" }, audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+  } catch (e) {
+    note("NO CAMERA — PHANTOM MODE", true);
+    return;
+  }
+  try {
+    const fileset = await FilesetResolver.forVisionTasks(WASM_ROOT);
+    faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: FACE_MODEL, delegate: "GPU" },
+      runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: false,
+    });
+    imageSegmenter = await ImageSegmenter.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: SEG_MODEL, delegate: "GPU" },
+      runningMode: "VIDEO", outputCategoryMask: false, outputConfidenceMasks: true,
+    });
+    camReady = true;
+    note("", false);
+  } catch (e) {
+    console.warn("[puppet] MediaPipe failed to load, phantom mode only", e);
+    note("TRACKING FAILED TO LOAD — PHANTOM MODE", true);
+  }
+}
+startTracking();
+
+/* ------------------------------ per-frame vision ------------------------------ */
+function updateHeadFromLandmarks(landmarks, vw, vh) {
+  const L = landmarks[L_EYE], R = landmarks[R_EYE];
+  const dxPx = (R.x - L.x) * vw, dyPx = (R.y - L.y) * vh;
+  const pxDist = Math.hypot(dxPx, dyPx);
+  if (pxDist < 4) return;
+  const focalPx = vw * 1.0;                    // rough assumed ~50-60deg webcam FOV
+  const z = Math.min(2.5, Math.max(0.2, (EYE_DIST_M * focalPx) / pxDist));
+  const midXn = (L.x + R.x) / 2, midYn = (L.y + R.y) / 2;   // normalized 0..1, mirrored view
+  const mirroredX = 1 - midXn;                  // selfie view is mirrored on screen
+  lastHead.x = (mirroredX - 0.5) * (z * vw / focalPx);
+  lastHead.y = -(midYn - 0.5) * (z * vh / focalPx) + 0.1;
+  lastHead.z = z;
+}
+
+function paintCutoutTextures(video, mask, vw, vh) {
+  if (rgbCanvas.width !== vw) { rgbCanvas.width = vw; rgbCanvas.height = vh; }
+  const rg = rgbCanvas.getContext("2d");
+  rg.save();
+  rg.translate(vw, 0); rg.scale(-1, 1);          // mirror to match selfie view
+  rg.drawImage(video, 0, 0, vw, vh);
+  rg.restore();
+  rgbTex.needsUpdate = true;
+
+  const mw = mask.width, mh = mask.height;
+  const raw = mask.getAsFloat32Array();
+  if (maskCanvas.width !== mw) { maskCanvas.width = mw; maskCanvas.height = mh; }
+  const mg = maskCanvas.getContext("2d");
+  const img = mg.createImageData(mw, mh);
+  for (let i = 0; i < mw * mh; i++) {
+    const v = Math.max(0, Math.min(1, raw[i])) * 255;
+    img.data[i * 4] = v; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
+  }
+  mg.putImageData(img, 0, 0);
+  // feather: draw the low-res mask into a bigger, blurred canvas
+  const fw = 320, fh = Math.round(fw * mh / mw);
+  if (maskCanvas._fw !== fw) {
+    maskCanvas._fw = fw;
+    maskCanvas._fc = document.createElement("canvas");
+    maskCanvas._fc.width = fw; maskCanvas._fc.height = fh;
+  }
+  const fc = maskCanvas._fc, fg = fc.getContext("2d");
+  fg.clearRect(0, 0, fw, fh);
+  fg.filter = `blur(${MASK_BLUR_PX}px)`;
+  fg.drawImage(maskCanvas, 0, 0, mw, mh, 0, 0, fw, fh);
+  fg.filter = "none";
+  maskTex.image = fc;
+  maskTex.needsUpdate = true;
+
+  const aspect = vw / vh;
+  cutout.scale.set(1, 1 / aspect, 1);
+  cutout.visible = true;
+  phantom.visible = false;
+}
+
+/* --------------------------------- state -> light --------------------------------- */
+let sweepT = 0;
+function updateLight(dt, state, env, alert) {
+  const col = alert ? RED : (STATE_LIGHT[state] || STATE_LIGHT.idle);
+  key.color.setRGB(col[0] / 255, col[1] / 255, col[2] / 255);
+
+  let target;
+  if (alert) target = 9 + 2.5 * Math.abs(Math.sin(performance.now() / 130));
+  else if (state === "speaking") target = 6 + 7 * env;
+  else if (state === "thinking") target = 5.5 + 1.2 * Math.sin(performance.now() / 260);
+  else if (state === "listening") target = 6.5;
+  else target = 3.6 + 0.9 * Math.sin(performance.now() / 1400);   // idle breathing
+  key.intensity += (target - key.intensity) * Math.min(1, dt / 260);
+
+  sweepT += dt / 1000;
+  if (state === "thinking") {
+    key.position.x = 0.9 + Math.sin(sweepT * 1.3) * 0.9;
+    key.target.position.x = -0.15 + Math.sin(sweepT * 1.3 + 1) * 0.6;
+  } else {
+    key.position.x += (0.9 - key.position.x) * Math.min(1, dt / 500);
+    key.target.position.x += (-0.15 - key.target.position.x) * Math.min(1, dt / 500);
+  }
+}
+
+/* ----------------------------------- HUD ----------------------------------- */
+const D = AV.util.Descrambler;
+let stateTag = null, tagState = "";
+function drawHud(dt, state, alert) {
+  const label = alert ? "ALERT" : state.toUpperCase();
+  if (label !== tagState) { tagState = label; stateTag = new D(`${AV.name} // ${label}`, 40); }
+  hud.style.color = alert ? "rgb(255,46,46)" : "rgb(0,190,60)";
+  hud.textContent = stateTag.render(dt);
+}
+
+/* ------------------------------------ frame ------------------------------------ */
+let lastVideoTs = -1, lastPaint = 0;
+function frame(dt) {
+  AV.tick(dt);
+  const state = AV.state, alert = AV.alert;
+
+  if (camReady && video.readyState >= 2 && video.currentTime !== lastVideoTs) {
+    lastVideoTs = video.currentTime;
+    const ts = performance.now();
+    const vw = video.videoWidth, vh = video.videoHeight;
+    try {
+      const faceRes = faceLandmarker.detectForVideo(video, ts);
+      if (faceRes.faceLandmarks && faceRes.faceLandmarks[0]) {
+        updateHeadFromLandmarks(faceRes.faceLandmarks[0], vw, vh);
+        tracking = true;
+      }
+      const segRes = imageSegmenter.segmentForVideo(video, ts);
+      if (segRes.confidenceMasks && segRes.confidenceMasks[0]) {
+        paintCutoutTextures(video, segRes.confidenceMasks[0], vw, vh);
+        segRes.confidenceMasks[0].close?.();
+      }
+    } catch (e) { /* a dropped frame is fine, the next one recovers */ }
+  }
+
+  smoothHead.x += (lastHead.x - smoothHead.x) * Math.min(1, dt / 220);
+  smoothHead.y += (lastHead.y - smoothHead.y) * Math.min(1, dt / 220);
+  smoothHead.z += (lastHead.z - smoothHead.z) * Math.min(1, dt / 220);
+
+  if (tracking && cutout.visible) {
+    applyOffAxisProjection(camera, smoothHead);
+  } else {
+    resetProjection(camera);
+    camera.position.set(0, 0.15, 2.4);
+    camera.lookAt(0, -0.1, -1.5);
+    // phantom breathes gently on its own so it never looks frozen
+    const t = performance.now() / 1000;
+    phantom.scale.setScalar(1 + Math.sin(t * 1.1) * 0.02 + AV.env * 0.06);
+    phantom.rotation.y = Math.sin(t * 0.4) * 0.25;
+  }
+
+  updateLight(dt, state, AV.env, alert);
+  if (state === "speaking") {
+    cutout.position.x = Math.sin(performance.now() / 210) * 0.02 * AV.env;
+  }
+  drawHud(dt, state, alert);
+  renderer.render(scene, camera);
+}
+
+addEventListener("keydown", e => {
+  if (e.key === "f" || e.key === "F") {
+    document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  }
+});
+
+if (AV.shot) {
+  AV.shotRun(frame);
+} else {
+  let last = performance.now();
+  (function loop(ts) {
+    const dt = Math.min(100, ts - last); last = ts;
+    frame(dt);
+    requestAnimationFrame(loop);
+  })(performance.now());
+}
+</script>
+</body>
+</html>
