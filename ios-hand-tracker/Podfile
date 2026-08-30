@@ -9,17 +9,21 @@
 platform :ios, '16.0'
 use_frameworks!
 
+# HandTrackerAppTests is deliberately NOT listed here (not even with
+# inherit!:search_paths, which was tried and reverted 2026-08-30). CocoaPods
+# generates its own "Embed Frameworks" copy for ANY target it's told about,
+# regardless of inherit mode -- with the test target ALSO getting its own
+# copy of MediaPipeTasksVision's dynamic framework, dyld loaded the native
+# (C++) code twice in one process and its global calculator registry
+# aborted: "Function with name FlowLimiterCalculator already registered"
+# (confirmed live in CI, alongside dyld's own "Class X is implemented in
+# both..." warnings naming the app's binary AND the test bundle as the two
+# copies). project.yml now sets TEST_HOST/BUNDLE_LOADER directly on
+# HandTrackerAppTests instead -- that's what makes Xcode treat it as a
+# genuinely hosted test (inheriting the host app's search paths for
+# @testable import to resolve, and running against the ALREADY-loaded host
+# binary instead of embedding a second copy). CocoaPods needs no
+# involvement in the test target at all once that's set correctly.
 target 'HandTrackerApp' do
   pod 'MediaPipeTasksVision'
-
-  # Confirmed live in CI (2026-08-30): HandTrackerAppTests failed with
-  # "unable to resolve module dependency: 'MediaPipeTasksVision'" even
-  # though its own test file never imports it directly -- `@testable
-  # import HandTrackerApp` needs MediaPipeTasksVision resolvable too,
-  # since the app target it's testing depends on it. inherit!:search_paths
-  # (standard CocoaPods pattern for a hosted test target) gives it the
-  # same search paths without a second, separately-linked pod copy.
-  target 'HandTrackerAppTests' do
-    inherit! :search_paths
-  end
 end
