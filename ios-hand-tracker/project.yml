@@ -56,6 +56,14 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "5.9"
+        PRODUCT_BUNDLE_IDENTIFIER: com.jarvis.handtracker.apptests
+        CODE_SIGN_STYLE: Automatic
+        # Confirmed live in CI (2026-08-30): with no info: block XcodeGen
+        # doesn't generate one for a test target OR turn this on by
+        # default, and xcodebuild refuses to code-sign a target with no
+        # Info.plist at all. HandTrackerApp's own info: block above covers
+        # the app target; this is the test bundle's equivalent.
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   HandTrackerApp:
