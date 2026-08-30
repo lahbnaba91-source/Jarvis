@@ -1,40 +1,84 @@
 import SwiftUI
 import HandTracker
 
-/// Proves the pieces actually link and initialize together: the
-/// HandTracker package's `HandTrackerPipeline` wired to a real
-/// `MediaPipeHandDetector`. Deliberately does NOT call `pipeline.start()`
-/// on appear -- that would trigger a real camera-permission prompt the
-/// instant CI launches this for testing, which has no one there to answer
-/// it and would just hang the run. Wire a real Start button + camera
-/// preview layer here when this becomes an actual product surface instead
-/// of a build/integration harness.
+/// Real, minimal end-to-end harness: a camera preview, a Start button, and
+/// a live readout of what MediaPipe actually detects -- enough to confirm
+/// hand tracking genuinely works on a device, without building a full
+/// skeleton-overlay UI (that's product work, this is a test harness).
+///
+/// Does NOT auto-start capture on appear -- only the Start button calls
+/// `pipeline.start()`, so a camera-permission prompt only ever appears
+/// after a real tap, never on cold launch (matters for automated
+/// build/CI contexts, and is just better behavior for a real user too).
 struct ContentView: View {
-    @State private var initError: String?
+    @State private var status = "Not started"
+    @State private var handCount = 0
+    @State private var isRunning = false
 
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("HandTracker")
-                .font(.title)
-            Text(initError ?? "pipeline not started (see this file's comment)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-        .onAppear(perform: verifyPipelineInitializes)
-    }
+    private let pipeline: HandTrackerPipeline?
+    private let initError: String?
 
-    /// Constructs the real pipeline (detector + capture controller) purely
-    /// to confirm the MediaPipeTasksVision integration and the bundled
-    /// model asset actually resolve at runtime -- does not start capture.
-    private func verifyPipelineInitializes() {
+    init() {
         do {
             let detector = try MediaPipeHandDetector()
-            _ = HandTrackerPipeline(detector: detector)
+            pipeline = HandTrackerPipeline(detector: detector)
             initError = nil
         } catch {
+            pipeline = nil
             initError = "pipeline init failed: \(error)"
         }
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            if let pipeline {
+                CameraPreviewView(session: pipeline.captureSession)
+                    .ignoresSafeArea()
+            } else {
+                Color.black.ignoresSafeArea()
+            }
+
+            VStack(spacing: 12) {
+                Text(initError ?? status)
+                    .font(.footnote)
+                    .foregroundStyle(.white)
+                Text("Hands detected: \(handCount)")
+                    .font(.footnote)
+                    .foregroundStyle(.white)
+
+                Button(isRunning ? "Stop" : "Start") {
+                    isRunning ? stop() : start()
+                }
+                .disabled(pipeline == nil)
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+            .background(.black.opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding()
+        }
+        .onAppear {
+            pipeline?.onResult = { hands in
+                DispatchQueue.main.async { handCount = hands.count }
+            }
+        }
+    }
+
+    private func start() {
+        do {
+            try pipeline?.start()
+            isRunning = true
+            status = "Running"
+        } catch {
+            status = "start() failed: \(error)"
+        }
+    }
+
+    private func stop() {
+        pipeline?.stop()
+        isRunning = false
+        handCount = 0
+        status = "Stopped"
     }
 }
 
