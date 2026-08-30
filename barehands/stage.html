@@ -3134,6 +3134,25 @@ function oneEuro(minCutoff = 1.2, beta = 0.7, dCutoff = 1.0) {
   };
 }
 
+// plain framerate-independent EMA, no predictive lead -- oneEuro()'s lead
+// term extrapolates from the signal's own rate of change, which is right
+// for hand position (cancels drag lag) but wrong for DEPTH PUSH/PULL's
+// span ratio: it re-amplifies that ratio's frame-to-frame noise as
+// overshoot instead of damping it. This just glides toward the target,
+// monotonically, no overshoot possible. halfLifeMs is a reasoned first
+// pass (converges in ~3-4 half-lives, so ~700-900ms to settle after
+// motion stops) -- not yet fitted from real footage.
+function depthSmoother(halfLifeMs = 220) {
+  let prev = null, tPrev = null;
+  return (x, tMs) => {
+    if (prev == null) { prev = x; tPrev = tMs; return x; }
+    const dt = Math.max(tMs - tPrev, 1);
+    tPrev = tMs;
+    const alpha = 1 - Math.pow(0.5, dt / halfLifeMs);
+    prev = prev + alpha * (x - prev);
+    return prev;
+  };
+}
 const LM_JUMP_CEIL = 0.9;   // span-units a landmark may move in one raw
                             // frame before it's an occlusion outlier
 const LM_STUCK_MAX = 3;     // consecutive frames a landmark may be held
@@ -3310,8 +3329,17 @@ function beginGrab(c, i, cur, lms) {
     if (lms && c.type !== "panel" && c.type !== "browser" && c.type !== "orb") {
       c.depthSpan0 = lmSpan(lms);
       c.depthScale0 = c.scale;
+      // smooths the span/depthSpan0 ratio physics() applies to scale each
+      // frame -- span is just wrist-to-middle-knuckle, so ordinary hand
+      // tremor is a much bigger fraction of it than of full hand position,
+      // and the ratio itself was going straight to scale with no damping
+      // of its own. Slower than the position filters (lower minCutoff/
+      // beta) since scale only needs to glide, not track frame-perfectly.
+      c.depthF = depthSmoother();
+      c.depthF(1, performance.now());
     } else {
       c.depthSpan0 = null;
+      c.depthF = null;
     }
   } else if (c.grabbedBy.length === 2 && c.mode !== "pinned") {
     // v3 (Jared's ruling 2026-08-14): two hands = SCALE ONLY — the
@@ -3337,6 +3365,7 @@ function endGrab(c, i, cur) {
     // back toward it. Clearing it here forces physics() to re-arm a
     // fresh baseline from the CURRENT (post-stretch) scale instead.
     c.depthSpan0 = null;
+    c.depthF = null;
     const rem = cursors[c.grabbedBy[0]];
     if (rem) { c.ox = c.x - rem.x; c.oy = c.y - rem.y; c.mode = "move";
                c.holdX = rem.x; c.holdY = rem.y;
@@ -4744,9 +4773,12 @@ async function boot() {
               if (!held.depthSpan0) {
                 held.depthSpan0 = span;
                 held.depthScale0 = held.scale;
+                held.depthF = depthSmoother();
+                held.depthF(1, now);
               } else {
+                const ratio = held.depthF(span / held.depthSpan0, now);
                 held.scale = Math.min(12, Math.max(0.12,
-                  held.depthScale0 * (span / held.depthSpan0)));
+                  held.depthScale0 * ratio));
               }
             }
             // UNIVERSAL 3D-GRAB (2026-08-27, Luis's ask -- activation felt
