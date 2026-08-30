@@ -120,7 +120,23 @@ if command -v claude >/dev/null 2>&1; then
     skip "claude CLI installed — verify you're logged into the right account (claude login if not)"
   fi
 else
-  warn "claude CLI not found on PATH — install it, then run 'claude login' before continuing. Nothing else here runs without it."
+  warn "claude CLI not found on PATH — install it (scripts/install-prereqs.sh), open a NEW terminal, then run 'claude login' before continuing. Nothing else here runs without it."
+fi
+
+say "Claude Code trust dialog"
+if [ -f "$HOME/.claude.json" ]; then
+  # Pre-approves the first-run "trust this folder?" prompt, which is an
+  # arrow-key-only menu -- unusable from a mobile browser terminal with no
+  # down-arrow key (confirmed 2026-08-29). Harmless no-op if already trusted.
+  python3 -c "
+import json
+p = '$HOME/.claude.json'
+d = json.load(open(p))
+d.setdefault('projects', {}).setdefault('$JARVIS_ROOT', {})['hasTrustDialogAccepted'] = True
+json.dump(d, open(p, 'w'))
+" && echo "    pre-approved (skips the arrow-key trust menu on first 'claude login'/session)"
+else
+  skip "~/.claude.json doesn't exist yet — run 'claude' once first, then re-run this script"
 fi
 
 # ---------------------------------------------------------------------------
@@ -201,13 +217,13 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Part 5 — .claude/settings.local.json hooks
+# Part 5 — state-sync hooks
 # ---------------------------------------------------------------------------
-say "Claude Code hooks (.claude/settings.local.json)"
-if [ -f .claude/settings.local.json ]; then
-  skip ".claude/settings.local.json already exists"
+say "Claude Code hooks (.claude/settings.json)"
+if [ -f .claude/settings.json ] && grep -q '"hooks"' .claude/settings.json; then
+  skip ".claude/settings.json already has the hooks block (tracked in git, ships with the clone)"
 else
-  warn ".claude/settings.local.json is missing (gitignored, never backed up in git) — the three state-sync hooks that drive Jarvis Face/Hands need restoring from a backup or rebuilding by hand. See Jarvis Face (ai-visualizer)'s 'Where it lives' section for the exact hook commands."
+  warn ".claude/settings.json is missing or has no hooks block — the three state-sync hooks that drive Jarvis Face/Hands need rebuilding by hand. See Jarvis Face (ai-visualizer)'s 'Where it lives' section for the exact hook commands."
 fi
 
 # ---------------------------------------------------------------------------

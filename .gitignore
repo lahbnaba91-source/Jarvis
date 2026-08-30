@@ -52,3 +52,7 @@ jarvis-voice/jarvis_voice.egg-info/
 __pycache__/
 
 .DS_Store
+
+# pull-hq-vault.py's own hidden baseline clone -- a change-detection sensor,
+# never the vault content itself (that stays HQ/, a plain copy on purpose).
+.hq-vault-pull-sensor/
