@@ -2,9 +2,13 @@
 # GitHub Gitless Sync. Kept on disk here for the local AI session, not tracked.
 HQ/
 
-# Vendored ai-visualizer (jaredrhod/ai-visualizer) and its runtime state —
-# third-party tool, not our code, updated via its own update.sh.
-ai-visualizer/
+# ai-visualizer (vendored from jaredrhod/ai-visualizer, plus a Jarvis-specific
+# voice-proxy patch and bind fix) IS tracked here as of 2026-08-29 — it used
+# to be excluded entirely on the theory that update.sh would re-vendor it,
+# but that patch and the bind fix lived ONLY on one machine's disk with no
+# git history anywhere, and got silently lost on a fresh codespace. Its own
+# ai-visualizer/.gitignore still excludes the personal config and runtime
+# voice-state files; only the blanket top-level exclusion is gone.
 .voice-bus/
 
 # jarvis-voice: server.py is ours and tracked, but the venv and any
@@ -26,9 +30,13 @@ scripts/spotify/.state/
 # per-run latency log and calibration result are local runtime state.
 scripts/lightshow/state/
 
-# Vendored barehands (jaredrhod/barehands) — third-party tool, not our
-# code, updated via its own update.sh.
-barehands/
+# barehands (vendored from jaredrhod/barehands, plus real Jarvis-specific
+# gesture/customization work) IS tracked here as of 2026-08-29 — same
+# reasoning as ai-visualizer above: it used to be excluded and rely on its
+# own separate local git repo for history, but that repo had no remote, so a
+# fresh codespace got the vanilla upstream version with none of the actual
+# customization. Its own barehands/.gitignore still excludes barehands.json
+# and the state/ runtime files; only the blanket top-level exclusion is gone.
 
 # jarvis-voice: generated packaging metadata from `pip install -e .`, not
 # source — regenerates on any fresh env.

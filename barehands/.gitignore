@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+*.pyc
+# the ring's live runtime files (see state/README.md)
+state/state
+state/mood.json
+state/wave.json
+# runtime logs -- grow forever, not code
+state/server.log
+state/gesture_log.jsonl
+# derived from gesture_log.jsonl above -- same reasoning, personal
+# recorded-take data, not portable test fixture. Regenerate locally
+# with: node test/test-gestures.js --update
+test/gestures.snapshot.json
+# your personal config, created at setup: never tracked, never touched by updates
+barehands.json
