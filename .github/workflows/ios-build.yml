@@ -1,0 +1,85 @@
+name: iOS Native Build & Test
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ios-hand-tracker/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'ios-hand-tracker/**'
+      - '.github/workflows/ios-build.yml'
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ios-hand-tracker
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Cache SPM Dependencies (HandTracker package)
+        uses: actions/cache@v4
+        with:
+          path: ios-hand-tracker/.build
+          key: ${{ runner.os }}-spm-${{ hashFiles('ios-hand-tracker/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      # Confirms the plain SPM library (capture/preprocessing/smoothing,
+      # zero third-party deps) still builds and its pure-Swift tests still
+      # pass on its own, independent of the app/CocoaPods layer below.
+      # This is the one target that was realistically testable without a
+      # device or camera before any of this CI existed.
+      - name: Build and Test HandTracker package standalone
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # Same model URL barehands' own web tracker already uses live in
+      # production (stage.html) -- not committed to the repo as a binary,
+      # fetched fresh each run instead.
+      - name: Download the MediaPipe hand-landmarker model
+        run: |
+          mkdir -p App/Resources
+          curl -fL -o App/Resources/hand_landmarker.task \
+            https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
+
+      # Generates HandTrackerApp.xcodeproj from project.yml. Must run
+      # BEFORE `pod install` every time -- regenerating the .xcodeproj
+      # afterward would wipe CocoaPods' integration into it.
+      - name: Generate Xcode project (XcodeGen)
+        run: xcodegen generate
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios-hand-tracker/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios-hand-tracker/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      # Pulls in MediaPipeTasksVision -- CocoaPods' only official
+      # distribution channel for it (see Podfile / README.md). Produces
+      # HandTrackerApp.xcworkspace.
+      - name: Install CocoaPods dependencies
+        run: pod install --repo-update
+
+      # The real integration check: app target + MediaPipeTasksVision
+      # (via CocoaPods) + the local HandTracker package, compiled and
+      # exercised by HandTrackerAppTests on an iOS Simulator.
+      - name: Build and Run iOS Simulator Tests
+        run: |
+          xcodebuild clean test \
+            -workspace HandTrackerApp.xcworkspace \
+            -scheme HandTrackerApp \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max'

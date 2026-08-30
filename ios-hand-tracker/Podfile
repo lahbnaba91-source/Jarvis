@@ -1,0 +1,14 @@
+# CocoaPods is the ONLY official distribution channel for
+# MediaPipeTasksVision (no SPM support -- see README.md and
+# HandLandmarkTypes.swift for the full reasoning, confirmed against the
+# still-open google-ai-edge/mediapipe#5464 and #6167). This Podfile targets
+# HandTrackerApp, the XcodeGen-generated project's app target -- run
+# `xcodegen generate` BEFORE `pod install`, every time, since regenerating
+# the .xcodeproj afterward would wipe CocoaPods' integration into it.
+
+platform :ios, '16.0'
+use_frameworks!
+
+target 'HandTrackerApp' do
+  pod 'MediaPipeTasksVision'
+end
