@@ -88,7 +88,7 @@ HUBSPACE_SCRIPT = HERE.parent / "scripts" / "hubspace" / "hubspace_light.py"
 # -- see scripts/spotify/spotify_play.py.
 SPOTIFY_SCRIPT = HERE.parent / "scripts" / "spotify" / "spotify_play.py"
 SPOTIFY_CREDS = HERE.parent / "scripts" / "spotify" / ".state" / "creds.json"
-SPOTIFY_REDIRECT = "https://cuddly-space-doodle-4qwjpgpvqvgrhqgvq-8794.app.github.dev/spotify/callback"
+SPOTIFY_REDIRECT = "https://jubilant-goldfish-5vxr5wvgqjjr2976-8794.app.github.dev/spotify/callback"
 SPOTIFY_SCOPES = "user-modify-playback-state user-read-playback-state"
 SPOTIFY_TRACK = "spotify:track:6GzCkTddOn1vSln1gbSr8y"   # the rock-on track
 
