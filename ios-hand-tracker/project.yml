@@ -1,0 +1,68 @@
+# XcodeGen spec (https://github.com/yonaskolb/XcodeGen) -- generates
+# HandTrackerApp.xcodeproj deterministically from this file. Checked in
+# instead of the .xcodeproj itself: a hand-maintained .pbxproj is fragile
+# (UUID references, easy to corrupt by hand) and this repo's author had no
+# way to validate one directly (see README.md's verification-status note).
+# CI runs `xcodegen generate` before `pod install`/`xcodebuild` -- see
+# .github/workflows/ios-build.yml.
+name: HandTrackerApp
+options:
+  bundleIdPrefix: com.jarvis.handtracker
+  deploymentTarget:
+    iOS: "16.0"
+
+packages:
+  # the actual pipeline code (capture/preprocess/smoothing) -- unchanged,
+  # zero third-party deps, lives in ../ (this file's directory) alongside
+  # its own Package.swift.
+  HandTracker:
+    path: .
+
+targets:
+  HandTrackerApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: HandTracker
+        product: HandTracker
+      # MediaPipeTasksVision is NOT listed here -- CocoaPods injects it
+      # into this generated target via Podfile + `pod install`, which
+      # rewrites HandTrackerApp.xcodeproj's build settings and produces
+      # HandTrackerApp.xcworkspace. xcodegen must run BEFORE pod install
+      # every time (regenerating the .xcodeproj would otherwise wipe the
+      # CocoaPods integration).
+    info:
+      path: App/Info.plist
+      properties:
+        UILaunchScreen: {}
+        NSCameraUsageDescription: "HandTracker needs the camera to track your hand for gesture-based control."
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jarvis.handtracker.app
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.9"
+
+  HandTrackerAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AppTests
+    dependencies:
+      - target: HandTrackerApp
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+
+schemes:
+  HandTrackerApp:
+    build:
+      targets:
+        HandTrackerApp: all
+        HandTrackerAppTests: [test]
+    test:
+      targets:
+        - HandTrackerAppTests
