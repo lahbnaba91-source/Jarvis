@@ -24,6 +24,11 @@ import CoreVideo
 public final class CaptureSessionController: NSObject {
     public var onFrame: ((CVPixelBuffer, CMTime) -> Void)?
 
+    /// Exposed read-only so a UI layer can attach an
+    /// `AVCaptureVideoPreviewLayer` to it -- this class only owns
+    /// capture/frame delivery, not any rendering.
+    public var captureSession: AVCaptureSession { session }
+
     private let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
     private let sessionQueue = DispatchQueue(label: "handtracker.capture.session")

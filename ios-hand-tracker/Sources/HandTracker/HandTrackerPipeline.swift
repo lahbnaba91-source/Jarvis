@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreMedia
 import CoreVideo
 
@@ -10,6 +11,10 @@ import CoreVideo
 public final class HandTrackerPipeline {
     public var onResult: (([HandLandmarks]) -> Void)?
     public var preprocessSettings = FramePreprocessor.Settings()
+
+    /// Exposed so a UI layer can attach an `AVCaptureVideoPreviewLayer`
+    /// without this package needing to know anything about UIKit/SwiftUI.
+    public var captureSession: AVCaptureSession { capture.captureSession }
 
     private let capture = CaptureSessionController()
     private let preprocessor: FramePreprocessor?

@@ -1,10 +1,12 @@
 import SwiftUI
 
 /// Deliberately minimal -- this app target exists to give CocoaPods (and
-/// therefore MediaPipeTasksVision) somewhere real to attach, and to give
-/// CI something to compile and test. It is not a product. `ContentView`
-/// does not auto-start the camera on launch (see its own comment) so
-/// `xcodebuild test` never blocks on a simulator camera-permission prompt.
+/// therefore MediaPipeTasksVision) somewhere real to attach, to give CI
+/// something to compile, and to give a real device a way to actually run
+/// the pipeline and confirm hand tracking works. `ContentView` never
+/// auto-starts the camera on launch, only on a real Start-button tap, so
+/// there's never an unexpected permission prompt (and CI, which only
+/// builds this target, never touches the camera at all).
 @main
 struct HandTrackerAppApp: App {
     var body: some Scene {
