@@ -11,4 +11,15 @@ use_frameworks!
 
 target 'HandTrackerApp' do
   pod 'MediaPipeTasksVision'
+
+  # Confirmed live in CI (2026-08-30): HandTrackerAppTests failed with
+  # "unable to resolve module dependency: 'MediaPipeTasksVision'" even
+  # though its own test file never imports it directly -- `@testable
+  # import HandTrackerApp` needs MediaPipeTasksVision resolvable too,
+  # since the app target it's testing depends on it. inherit!:search_paths
+  # (standard CocoaPods pattern for a hosted test target) gives it the
+  # same search paths without a second, separately-linked pod copy.
+  target 'HandTrackerAppTests' do
+    inherit! :search_paths
+  end
 end
