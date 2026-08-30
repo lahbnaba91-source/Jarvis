@@ -82,4 +82,4 @@ jobs:
           xcodebuild clean test \
             -workspace HandTrackerApp.xcworkspace \
             -scheme HandTrackerApp \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro Max'
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max'
