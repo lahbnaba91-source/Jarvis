@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p /workspaces/Jarvis/.voice-bus /workspaces/Jarvis/barehands/state && echo idle > /workspaces/Jarvis/.voice-bus/.voice_state && printf idle > /workspaces/Jarvis/barehands/state/state"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo thinking > /workspaces/Jarvis/.voice-bus/.voice_state && printf thinking > /workspaces/Jarvis/barehands/state/state"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo speaking > /workspaces/Jarvis/.voice-bus/.voice_state; printf speaking > /workspaces/Jarvis/barehands/state/state; nohup bash -c 'sleep 3; echo idle > /workspaces/Jarvis/.voice-bus/.voice_state; printf idle > /workspaces/Jarvis/barehands/state/state' >/dev/null 2>&1 &"
+          }
+        ]
+      }
+    ]
+  }
+}
