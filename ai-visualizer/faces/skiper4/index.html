@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Toggle Row</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden}
+  :root{--sz:clamp(52px,13vw,110px);--btnsz:clamp(44px,12vw,96px);--gap:clamp(10px,3vw,26px)}
+  #dock{
+    position:fixed;right:32px;bottom:32px;
+    display:flex;flex-direction:column;align-items:center;gap:var(--gap);z-index:10;
+    max-height:96vh;
+  }
+  #handle{
+    width:var(--sz);height:var(--sz);flex:0 0 auto;border-radius:50%;border:none;
+    cursor:pointer;background:rgba(255,255,255,.14);color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-size:calc(var(--sz)*.4);line-height:1;
+    transition:transform .15s ease,background .15s ease;
+  }
+  #handle:active{transform:scale(.92)}
+  #pill{
+    display:grid;grid-template-rows:0fr;
+    transition:grid-template-rows .5s cubic-bezier(.34,1.56,.64,1);
+    border-radius:calc(var(--sz)/2);background:rgba(255,255,255,.14);width:var(--sz);
+  }
+  #pill.open{grid-template-rows:1fr}
+  #pillInner{
+    overflow:hidden;display:flex;align-items:center;justify-content:center;width:100%;
+  }
+  #pillRow{
+    display:flex;flex-direction:column;align-items:center;gap:var(--gap);
+    padding:var(--gap) 0;
+  }
+  #pillRow .tbtn{
+    opacity:0;transform:scale(.5) translateY(6px);filter:blur(4px);
+    transition:opacity .3s ease,transform .3s ease,filter .3s ease;
+  }
+  #pill.open #pillRow .tbtn{
+    opacity:1;transform:scale(1) translateY(0);filter:blur(0);
+    transition-delay:.2s;
+  }
+  .tbtn{
+    width:var(--btnsz);height:var(--btnsz);
+    flex:0 0 auto;border-radius:50%;border:none;cursor:pointer;
+    background:#000;color:#fff;display:flex;align-items:center;justify-content:center;
+    transition:background .15s ease,color .15s ease,transform .15s ease;
+    padding:0;
+  }
+  .tbtn:active{transform:scale(.92)}
+  .tbtn.dark{background:#fff;color:#000}
+  .tbtn svg{width:60%;height:60%;overflow:visible}
+  .icon-a,.icon-b{
+    transform-origin:16px 16px;
+    transition:opacity .15s ease,transform .15s ease;
+  }
+  .icon-b{opacity:0;transform:scale(.4) rotate(-90deg)}
+  .tbtn.dark .icon-a{opacity:0;transform:scale(.4) rotate(90deg)}
+  .tbtn.dark .icon-b{opacity:1;transform:scale(1) rotate(0)}
+  .ray{transform-origin:16px 16px;transition:opacity .15s ease,transform .15s ease}
+  .tbtn.dark .ray{opacity:0;transform:scale(.5)}
+</style>
+</head>
+<body>
+<div id="dock">
+<div id="pill">
+<div id="pillInner">
+<div id="pillRow">
+  <!-- 1: split circle, rotates -->
+  <button class="tbtn" data-b="1" aria-label="toggle 1">
+    <svg viewBox="0 0 32 32">
+      <g class="icon-a">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M16 2a14 14 0 0 1 0 28z" fill="currentColor"/>
+      </g>
+      <g class="icon-b">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M16 30a14 14 0 0 1 0-28z" fill="currentColor"/>
+      </g>
+    </svg>
+  </button>
+
+  <!-- 2: sun -> moon, straight rays -->
+  <button class="tbtn" data-b="2" aria-label="toggle 2">
+    <svg viewBox="0 0 32 32">
+      <g class="icon-a">
+        <circle cx="16" cy="16" r="8" fill="currentColor"/>
+        <g class="ray" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M16 3v4"/><path d="M16 25v4"/>
+          <path d="M3 16h4"/><path d="M25 16h4"/>
+          <path d="m7 7 2.6 2.6"/><path d="m22.4 22.4 2.6 2.6"/>
+          <path d="m25 7-2.6 2.6"/><path d="m9.6 22.4-2.6 2.6"/>
+        </g>
+      </g>
+      <g class="icon-b">
+        <path d="M22 15.5A9 9 0 0 1 12.5 6 9 9 0 1 0 22 15.5z" fill="currentColor"/>
+      </g>
+    </svg>
+  </button>
+
+  <!-- 3: sun -> moon, sparkle rays -->
+  <button class="tbtn" data-b="3" aria-label="toggle 3">
+    <svg viewBox="0 0 32 32">
+      <g class="icon-a">
+        <circle cx="16" cy="16" r="7.5" fill="currentColor"/>
+        <g class="ray" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M16 2.5v3"/><path d="M16 26.5v3"/>
+          <path d="M2.5 16h3"/><path d="M26.5 16h3"/>
+          <path d="m5.8 5.8 2.1 2.1"/><path d="m24.1 24.1 2.1 2.1"/>
+          <path d="m26.2 5.8-2.1 2.1"/><path d="m7.9 24.1-2.1 2.1"/>
+        </g>
+      </g>
+      <g class="icon-b">
+        <path d="M23 16.8A9.5 9.5 0 0 1 12.2 6a9.5 9.5 0 1 0 10.8 10.8z" fill="currentColor"/>
+        <g fill="currentColor">
+          <circle cx="26" cy="8" r="1.4"/>
+          <circle cx="22" cy="4" r="1"/>
+        </g>
+      </g>
+    </svg>
+  </button>
+
+  <!-- 4: sun with base bars -> moon -->
+  <button class="tbtn" data-b="4" aria-label="toggle 4">
+    <svg viewBox="0 0 32 32">
+      <g class="icon-a">
+        <circle cx="16" cy="14" r="7" fill="currentColor"/>
+        <g class="ray" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M16 1.5v3"/>
+          <path d="m26.5 8-2.6 1.5"/>
+          <path d="m5.5 8 2.6 1.5"/>
+          <path d="m26.5 20-2.6-1.5"/>
+          <path d="m5.5 20 2.6-1.5"/>
+        </g>
+      </g>
+      <g class="icon-b">
+        <path d="M21.5 13.7A7.3 7.3 0 0 1 13.3 5.5a7.3 7.3 0 1 0 8.2 8.2z" fill="currentColor"/>
+      </g>
+      <g fill="currentColor" opacity=".85">
+        <rect x="10" y="24" width="12" height="1.6" rx=".8"/>
+        <rect x="10" y="27" width="12" height="1.6" rx=".8"/>
+      </g>
+    </svg>
+  </button>
+
+  <!-- 5: plain circle crescent -->
+  <button class="tbtn" data-b="5" aria-label="toggle 5">
+    <svg viewBox="0 0 32 32">
+      <g class="icon-a">
+        <circle cx="16" cy="16" r="9" fill="currentColor"/>
+      </g>
+      <g class="icon-b">
+        <path d="M20 16A9 9 0 0 1 11 7a9 9 0 1 0 9 9z" fill="currentColor"/>
+      </g>
+    </svg>
+  </button>
+</div>
+</div>
+</div>
+<button id="handle" aria-label="expand toggles">&#8942;</button>
+</div>
+
+<script src="../../core.js"></script>
+<script>
+"use strict";
+AV.init();
+AV.ready(a => { document.title = a.name + " Toggle Row"; });
+
+document.querySelectorAll(".tbtn").forEach(btn => {
+  btn.addEventListener("click", () => btn.classList.toggle("dark"));
+});
+
+document.getElementById("handle").addEventListener("click", () => {
+  document.getElementById("pill").classList.toggle("open");
+});
+
+addEventListener("keydown", e => {
+  if (e.key === "f" || e.key === "F") {
+    document.fullscreenElement ? document.exitFullscreen()
+      : document.documentElement.requestFullscreen();
+  }
+});
+</script>
+</body>
+</html>
+<!--
+Toggle icon design adapted from Skiper UI's theme-toggle animations
+(https://skiper-ui.com, component Skiper4, MIT-style free-tier license
+requiring attribution). Original: React + Framer Motion by @gurvinder-singh02
+(https://gxuri.me). Ported here to plain SVG/CSS/JS to match this project's
+dependency-free face format.
+-->

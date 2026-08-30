@@ -10,7 +10,7 @@ start() {
     echo "$name already running on :$port — skipping"
     return
   fi
-  (cd "$dir" && nohup $cmd > "$log" 2>&1 &)
+  (cd "$dir" && mkdir -p "$(dirname "$log")" && nohup $cmd > "$log" 2>&1 &)
   echo "$name starting on :$port (log: $log)"
 }
 

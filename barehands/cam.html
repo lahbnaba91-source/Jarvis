@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<!--
+barehands: move things on your screen with your bare hands.
+Copyright (C) 2026 Jared Rhodenizer
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>barehands camera</title>
+<style>
+  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+               background:#000; font-family:-apple-system,"SF Pro Display",sans-serif;
+               color:#dff3ee; }
+  #wrap { position:absolute; inset:0; display:flex; align-items:center;
+          justify-content:center; flex-direction:column; gap:18px;
+          text-align:center; padding:24px; box-sizing:border-box; }
+  h1 { font:14px "SF Mono",Menlo,monospace; letter-spacing:0.2em;
+       color:#a8d8cf; margin:0 0 6px; }
+  #pin { font:32px "SF Mono",Menlo,monospace; letter-spacing:0.15em;
+         background:rgba(255,255,255,0.06); border:1px solid rgba(140,240,225,0.35);
+         border-radius:10px; padding:14px 18px; width:9ch; text-align:center;
+         color:#8ff0e4; }
+  #pin:focus { outline:none; border-color:rgba(140,240,225,0.8); }
+  button { font:14px "SF Mono",Menlo,monospace; letter-spacing:0.06em;
+           padding:14px 28px; border-radius:8px; cursor:pointer;
+           background:rgba(111,229,214,0.15); color:#dff3ee;
+           border:1px solid rgba(140,240,225,0.55); }
+  button:disabled { opacity:0.4; }
+  #status { font:13px "SF Mono",Menlo,monospace; color:#7fb3ab; max-width:80vw; }
+  #status.err { color:#ff8a8a; }
+  video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+          display:none; }
+  body.live video { display:block; }
+  body.live #wrap { background:rgba(0,0,0,0.55); }
+  #flip { position:absolute; top:16px; right:16px; z-index:2; display:none;
+          padding:10px 16px; }
+  body.live #flip { display:block; }
+</style>
+</head>
+<body>
+<video id="preview" autoplay playsinline muted></video>
+<button id="flip" type="button">FLIP CAMERA</button>
+<div id="wrap">
+  <h1>BAREHANDS &middot; CAMERA</h1>
+  <div id="form">
+    <div><input id="pin" inputmode="numeric" maxlength="4" placeholder="0000" autofocus></div>
+    <div style="margin-top:14px"><button id="go">CONNECT</button></div>
+  </div>
+  <div id="status">enter the PIN shown on the barehands screen</div>
+</div>
+<script>
+// Camera-only pairing page: enter the PIN shown on stage.html, then this
+// page requests JUST the camera (no mic) and uploads JPEG frames to the
+// SAME server stage.html is served from (see /cam/pair, /cam/frame in
+// server.py). Luis's call (2026-08-26): this used to stream phone-to-
+// phone directly over WebRTC, which needed STUN/TURN to punch through
+// NAT and only worked some of the time depending on network conditions.
+// Both phones already reach this server reliably over the same
+// forwarded HTTPS tunnel used to load this very page -- so instead of
+// the two phones finding each other, this page just uploads to the
+// server and stage pulls from it. No NAT traversal problem at all, at
+// the cost of a small extra hop of latency versus true P2P.
+const pinEl = document.getElementById("pin");
+const goEl = document.getElementById("go");
+const flipEl = document.getElementById("flip");
+const statusEl = document.getElementById("status");
+const preview = document.getElementById("preview");
+
+let stream = null;
+let facing = "environment";   // which camera is live: "environment" (back) or "user" (front)
+// generation counter: bumped whenever the upload loop should stop (page
+// unload isn't the only exit -- a future re-pair would need this too).
+// A tick already in flight when the generation moves on discards itself
+// instead of landing a stale frame or overwriting a newer status line.
+let uploadGen = 0;
+
+function setStatus(msg, isErr) {
+  statusEl.textContent = msg;
+  statusEl.classList.toggle("err", !!isErr);
+}
+
+// front camera previews mirrored (how it feels natural to look at
+// yourself); back camera doesn't -- the stage's own feed always mirrors
+// separately (see stage.html's #cam), unaffected by this local preview.
+function applyPreviewMirror() {
+  preview.style.transform = facing === "user" ? "scaleX(-1)" : "none";
+}
+
+async function flipCamera() {
+  if (!stream) return;
+  const wantFacing = facing === "environment" ? "user" : "environment";
+  flipEl.disabled = true;
+  let newStream;
+  try {
+    newStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: wantFacing },
+               // lower capture res than before (was 1920x1080 ideal, often
+               // negotiated as a very tall 1080x1920 portrait instead --
+               // MediaPipe's GPU-delegate hand detector threw on nearly
+               // every frame at that aspect ratio: "ROI width and height
+               // must be > 0", a known edge case in its internal
+               // letterbox math for extreme portrait shapes). MediaPipe
+               // downscales internally anyway, so a smaller capture costs
+               // nothing on accuracy and dodges the degenerate aspect.
+               // Dropped again 960x540 -> 640x360 (2026-08-26, slow relay
+               // FPS report): smaller frames cost less to JPEG-encode here,
+               // decode on stage, and transfer over the relay each tick.
+               width: { ideal: 640 }, height: { ideal: 360 } },
+      audio: false,
+    });
+  } catch (e) {
+    setStatus("couldn't switch camera: " + e.message, true);
+    flipEl.disabled = false;
+    return;
+  }
+  stream.getTracks().forEach(t => t.stop());
+  stream = newStream;
+  facing = wantFacing;
+  preview.srcObject = stream;
+  applyPreviewMirror();
+  // the upload loop below just reads preview's live pixels each tick --
+  // swapping srcObject is all that's needed, no renegotiation to do.
+  flipEl.disabled = false;
+}
+flipEl.addEventListener("click", flipCamera);
+
+// Draws the live preview into a canvas, JPEG-encodes it, and POSTs it to
+// the server, aiming for ~15fps (a 66ms tick from a fixed setInterval).
+// FRAME-DROP FIX (2026-08-26, live report: FPS was crawling): the
+// previous version awaited its own upload's full network round-trip
+// before scheduling the next tick, so the real cycle time was "round-trip
+// + 66ms" -- through the Codespaces tunnel that's easily 150-300ms/frame,
+// capping this at 3-5fps regardless of resolution. The interval below
+// fires on a fixed local clock no matter how long uploads take; if the
+// PREVIOUS upload is still in flight, this tick just skips (drops that
+// frame) instead of queuing another request behind it. A dropped frame
+// once in a while is invisible in a live hand-tracking feed; a growing
+// backlog of stale queued uploads racing each other is not.
+let uploading = false;
+let uploadTimer = null;
+function uploadTick(myGen, session_id, canvas, ctx) {
+  if (myGen !== uploadGen) { clearInterval(uploadTimer); return; }
+  if (uploading || !preview.videoWidth) return;   // previous upload still in flight -- drop this tick
+  uploading = true;
+  canvas.width = preview.videoWidth; canvas.height = preview.videoHeight;
+  ctx.drawImage(preview, 0, 0);
+  canvas.toBlob(async (blob) => {
+    if (!blob || myGen !== uploadGen) { uploading = false; return; }
+    try {
+      const r = await fetch(`/cam/frame?session_id=${session_id}`, { method: "POST", body: blob });
+      if (myGen === uploadGen) setStatus(r.ok ? "streaming to stage — leave this tab open"
+        : "stage isn't receiving — pairing may have expired, reload to retry", !r.ok);
+    } catch (e) {
+      if (myGen === uploadGen) setStatus("upload failed — retrying…", true);
+    }
+    uploading = false;
+  }, "image/jpeg", 0.7);
+}
+
+async function connect() {
+  const pin = pinEl.value.trim();
+  if (!/^\d{4}$/.test(pin)) { setStatus("enter the 4-digit PIN", true); return; }
+  goEl.disabled = true;
+  setStatus("pairing…");
+  let session_id;
+  try {
+    const r = await fetch("/cam/pair", { method: "POST", body: JSON.stringify({ pin }) });
+    if (!r.ok) throw new Error((await r.json()).error || "pairing failed");
+    ({ session_id } = await r.json());
+  } catch (e) {
+    setStatus(e.message, true);
+    goEl.disabled = false;
+    return;
+  }
+
+  setStatus("requesting camera…");
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facing },
+               // lower capture res than before (was 1920x1080 ideal, often
+               // negotiated as a very tall 1080x1920 portrait instead --
+               // MediaPipe's GPU-delegate hand detector threw on nearly
+               // every frame at that aspect ratio: "ROI width and height
+               // must be > 0", a known edge case in its internal
+               // letterbox math for extreme portrait shapes). MediaPipe
+               // downscales internally anyway, so a smaller capture costs
+               // nothing on accuracy and dodges the degenerate aspect.
+               // Dropped again 960x540 -> 640x360 (2026-08-26, slow relay
+               // FPS report): smaller frames cost less to JPEG-encode here,
+               // decode on stage, and transfer over the relay each tick.
+               width: { ideal: 640 }, height: { ideal: 360 } },
+      audio: false,
+    });
+  } catch (e) {
+    setStatus("camera permission denied: " + e.message, true);
+    goEl.disabled = false;
+    return;
+  }
+  preview.srcObject = stream;
+  applyPreviewMirror();
+  document.body.classList.add("live");
+  setStatus("connecting to stage…");
+
+  if (uploadTimer) clearInterval(uploadTimer);   // a prior connect() attempt, if any -- one loop at a time
+  const myGen = ++uploadGen;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  uploadTimer = setInterval(() => uploadTick(myGen, session_id, canvas, ctx), 66);
+}
+
+goEl.addEventListener("click", connect);
+pinEl.addEventListener("keydown", e => { if (e.key === "Enter") connect(); });
+
+// scanning the stage's QR code lands here as /cam.html?pin=1234 -- skip
+// typing entirely. Manual entry (no camera, code didn't scan) still
+// works exactly as before.
+const qsPin = new URLSearchParams(location.search).get("pin");
+if (qsPin && /^\d{4}$/.test(qsPin)) {
+  pinEl.value = qsPin;
+  connect();
+}
+</script>
+</body>
+</html>

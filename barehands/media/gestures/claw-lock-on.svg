@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-80 340 760 400" font-family="'SF Mono', Menlo, Consolas, monospace">
+  <defs>
+    <style>
+      .amber { fill: #f0a84a; }
+      .good { fill: #45d8a8; }
+      .dim { fill: #7c8ba3; }
+      .head { fill: #e8edf7; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect x="-80" y="340" width="760" height="400" fill="#0a0e15"/>
+
+  <text x="290" y="368" text-anchor="middle" class="head" font-size="22">CLAW LOCK-ON</text>
+  <text x="290" y="388" text-anchor="middle" class="dim" font-size="12">target hand shape &#8212; tuned to your hand, 2026-08-25</text>
+
+  <!-- palm outline -->
+  <polygon points="300,640 253.6,497.3 291.6,480.2 333.3,495.8 363.0,530.9" fill="rgba(79,141,255,0.08)" stroke="none"/>
+  <polyline points="253.6,497.3 291.6,480.2 333.3,495.8 363.0,530.9" fill="none" stroke="rgba(79,141,255,0.35)" stroke-width="2"/>
+
+  <!-- bones -->
+  <g stroke="#4f8dff" stroke-width="3.4" stroke-linecap="round" fill="none">
+    <path d="M300,640 L249.1,608.2 L204.6,590.2 L161.9,579.6 L124.3,574.3"/>
+    <path d="M300,640 L253.6,497.3 L259.7,439.7 L285.1,467.9 L283.0,497.8"/>
+    <path d="M300,640 L291.6,480.2 L311.8,421.6 L319.4,460.9 L297.2,483.9"/>
+    <path d="M300,640 L333.3,495.8 L367.0,451.1 L363.9,486.9 L340.4,502.2"/>
+    <path d="M300,640 L363.0,530.9 L399.5,506.3 L387.2,531.4 L365.5,534.9"/>
+  </g>
+
+  <!-- mouth gap + span measures -->
+  <line x1="124.3" y1="574.3" x2="283.0" y2="497.8" stroke="#f0a84a" stroke-width="1.6" stroke-dasharray="2 6" stroke-linecap="round"/>
+  <line x1="300" y1="640" x2="291.6" y2="480.2" stroke="rgba(240,168,74,0.5)" stroke-width="1.2" stroke-dasharray="1 5"/>
+  <line x1="253.6" y1="497.3" x2="363.0" y2="530.9" stroke="rgba(240,168,74,0.5)" stroke-width="1.2" stroke-dasharray="1 5"/>
+
+  <!-- joints -->
+  <g>
+    <circle cx="300" cy="640" r="7.5" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+    <circle cx="249.1" cy="608.2" r="5" fill="#9fc2ff"/>
+    <circle cx="204.6" cy="590.2" r="5" fill="#9fc2ff"/>
+    <circle cx="161.9" cy="579.6" r="5" fill="#9fc2ff"/>
+    <circle cx="124.3" cy="574.3" r="6.5" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+
+    <circle cx="253.6" cy="497.3" r="5" fill="#9fc2ff"/>
+    <circle cx="259.7" cy="439.7" r="6" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+    <circle cx="285.1" cy="467.9" r="5" fill="#9fc2ff"/>
+    <circle cx="283.0" cy="497.8" r="6.5" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+
+    <circle cx="291.6" cy="480.2" r="5" fill="#9fc2ff"/>
+    <circle cx="311.8" cy="421.6" r="6" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+    <circle cx="319.4" cy="460.9" r="5" fill="#9fc2ff"/>
+    <circle cx="297.2" cy="483.9" r="6.5" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+
+    <circle cx="333.3" cy="495.8" r="5" fill="#9fc2ff"/>
+    <circle cx="367.0" cy="451.1" r="6" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+    <circle cx="363.9" cy="486.9" r="5" fill="#9fc2ff"/>
+    <circle cx="340.4" cy="502.2" r="6.5" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+
+    <circle cx="363.0" cy="530.9" r="5" fill="#9fc2ff"/>
+    <circle cx="399.5" cy="506.3" r="6" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+    <circle cx="387.2" cy="531.4" r="5" fill="#9fc2ff"/>
+    <circle cx="365.5" cy="534.9" r="6.5" fill="#dfeaff" stroke="#4f8dff" stroke-width="2.5"/>
+  </g>
+
+  <!-- landmark numbers -->
+  <g font-size="12" font-weight="600" fill="#0a0e15">
+    <circle cx="300" cy="663" r="10" fill="#dfeaff"/><text x="300" y="667" text-anchor="middle">0</text>
+    <circle cx="100" cy="574.3" r="10" fill="#dfeaff"/><text x="100" y="578" text-anchor="middle">4</text>
+    <circle cx="259.7" cy="416" r="10" fill="#dfeaff"/><text x="259.7" y="420" text-anchor="middle">6</text>
+    <circle cx="283.0" cy="524" r="10" fill="#dfeaff"/><text x="283.0" y="528" text-anchor="middle">8</text>
+    <circle cx="311.8" cy="397" r="10" fill="#dfeaff"/><text x="311.8" y="401" text-anchor="middle">10</text>
+    <circle cx="297.2" cy="508" r="10" fill="#dfeaff"/><text x="297.2" y="512" text-anchor="middle">12</text>
+    <circle cx="367.0" cy="427" r="10" fill="#dfeaff"/><text x="367.0" y="431" text-anchor="middle">14</text>
+    <circle cx="340.4" cy="524" r="10" fill="#dfeaff"/><text x="340.4" y="528" text-anchor="middle">16</text>
+    <circle cx="399.5" cy="483" r="10" fill="#dfeaff"/><text x="399.5" y="487" text-anchor="middle">18</text>
+    <circle cx="365.5" cy="558" r="10" fill="#dfeaff"/><text x="365.5" y="562" text-anchor="middle">20</text>
+  </g>
+
+  <!-- callouts -->
+  <g font-size="13">
+    <line x1="204.6" y1="590.2" x2="150" y2="660" stroke="rgba(240,168,74,0.5)" stroke-width="1"/>
+    <text x="30" y="672" class="amber">thumb &#183; opposes wide</text>
+    <text x="30" y="688" class="dim" font-size="11">169&#176; &#183; ~straight</text>
+
+    <line x1="203" y1="536" x2="130" y2="410" stroke="rgba(240,168,74,0.5)" stroke-width="1"/>
+    <text x="-70" y="400" class="amber">mouth gap (4&#8596;8)</text>
+    <text x="-70" y="416" class="good" font-size="12">0.80&#8211;1.45&#215; span</text>
+
+    <line x1="259.7" y1="439.7" x2="180" y2="380" stroke="rgba(240,168,74,0.5)" stroke-width="1"/>
+    <text x="20" y="368" class="amber">index hook</text>
+    <text x="20" y="384" class="good" font-size="12">curl &lt; 0.70</text>
+
+    <text x="290" y="378" text-anchor="middle" class="amber">middle hook &#8212; the anchor</text>
+    <text x="290" y="394" text-anchor="middle" class="good" font-size="12">curl &lt; 0.35</text>
+
+    <line x1="367.0" y1="451.1" x2="460" y2="390" stroke="rgba(240,168,74,0.5)" stroke-width="1"/>
+    <text x="470" y="378" class="amber">ring hook</text>
+    <text x="470" y="394" class="good" font-size="12">curl &lt; 0.55</text>
+
+    <line x1="399.5" y1="506.3" x2="520" y2="470" stroke="rgba(240,168,74,0.5)" stroke-width="1"/>
+    <text x="530" y="458" class="amber">pinky &#8212; curls in too</text>
+    <text x="530" y="474" class="good" font-size="12">curl &gt; &#8722;0.5</text>
+    <text x="530" y="490" class="dim" font-size="10.5">(your variant, not a talon)</text>
+
+    <text x="530" y="600" class="dim" font-size="10.5">palm span</text>
+    <text x="70" y="518" class="dim" font-size="10.5">knuckle row</text>
+  </g>
+
+  <!-- sequence strip -->
+  <g font-size="12.5">
+    <line x1="-80" y1="680" x2="680" y2="680" stroke="rgba(150,180,220,0.14)" stroke-width="1"/>
+    <text x="-70" y="705" class="dim">1&#41; flash open</text>
+    <text x="80" y="705" class="dim">2&#41; form the claw</text>
+    <text x="260" y="705" class="dim">3&#41; hold still 2.5s &#8212; shake starts</text>
+    <text x="500" y="705" class="amber">4&#41; SNAP (4+8) &#8212; pulls it in</text>
+    <text x="-70" y="725" class="dim" font-size="11">r:0.81&#8211;1.45 &#183; h8/h12/h16:&lt;1.5 &#183; a:&gt;1.05 &#183; CLAW:</text>
+    <text x="330" y="725" class="good" font-size="11" font-weight="700">YES</text>
+  </g>
+</svg>
