@@ -102,6 +102,15 @@ else
   warn "scripts/hubspace/requirements.txt not found — skipping"
 fi
 
+say "groq-agent dependency (requests)"
+if python3 -c "import requests" >/dev/null 2>&1; then
+  skip "requests already importable"
+elif [ -d scripts/groq-agent ]; then
+  pip install -q --user requests && echo "    installed requests --user"
+else
+  skip "scripts/groq-agent/ not found"
+fi
+
 # ---------------------------------------------------------------------------
 # Part 2.6 — Claude Code auth
 # ---------------------------------------------------------------------------
@@ -149,10 +158,13 @@ fi
 say "Secrets"
 
 if [ -n "${HQVAULT_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then
-  if gh secret list --app codespaces 2>/dev/null | grep -q '^HQVAULT_TOKEN'; then
-    skip "HQVAULT_TOKEN already set as a Codespaces secret"
-  elif confirm "Save HQVAULT_TOKEN as a Codespaces secret so it survives a rebuild of this Codespace?"; then
-    gh secret set HQVAULT_TOKEN --app codespaces --body "$HQVAULT_TOKEN" \
+  # HQVAULT_TOKEN is a USER-level Codespaces secret (survives a rebuild on
+  # any codespace under this account), not repo-scoped -- `gh secret list
+  # --app codespaces` alone checks repo scope and will never find it here.
+  if gh secret list -u 2>/dev/null | grep -q '^HQVAULT_TOKEN'; then
+    skip "HQVAULT_TOKEN already set as a user-level Codespaces secret"
+  elif confirm "Save HQVAULT_TOKEN as a user-level Codespaces secret so it survives a rebuild of any codespace on this account?"; then
+    gh secret set HQVAULT_TOKEN -u --body "$HQVAULT_TOKEN" \
       && echo "    saved. Any token pasted into a chat session is still burned per HQ Vault Sync's own rule — regenerate if this one ever was."
   fi
 fi
