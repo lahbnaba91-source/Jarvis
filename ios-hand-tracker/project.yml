@@ -58,6 +58,20 @@ targets:
         SWIFT_VERSION: "5.9"
         PRODUCT_BUNDLE_IDENTIFIER: com.jarvis.handtracker.apptests
         CODE_SIGN_STYLE: Automatic
+        # Confirmed live in CI (2026-08-30): `dependencies: [target:
+        # HandTrackerApp]` alone did NOT make XcodeGen wire this as a
+        # genuinely hosted test target -- MediaPipeTasksVision's native
+        # (C++) code
+        # ended up embedded in BOTH HandTrackerApp's own binary AND
+        # HandTrackerAppTests.xctest separately, and its global calculator
+        # registry (a process-wide C++ singleton) aborted on being
+        # initialized twice in one process: "Function with name
+        # FlowLimiterCalculator already registered." Setting TEST_HOST/
+        # BUNDLE_LOADER explicitly is what actually makes this a real
+        # hosted test -- the linker resolves symbols against the ALREADY-
+        # running host app binary instead of embedding a second copy.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/HandTrackerApp.app/HandTrackerApp"
+        BUNDLE_LOADER: "$(TEST_HOST)"
         # Confirmed live in CI (2026-08-30): with no info: block XcodeGen
         # doesn't generate one for a test target OR turn this on by
         # default, and xcodebuild refuses to code-sign a target with no
