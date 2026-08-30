@@ -90,6 +90,10 @@ jobs:
           grep -rl "HandLandmarker" Pods --include="*.h" 2>/dev/null | while read -r f; do
             echo "=== $f ==="; cat "$f"
           done
+          echo "--- MPPLandmark / MPPCategory headers (x/y/z, categoryName) ---"
+          find Pods -iname "MPPLandmark.h" -o -iname "MPPCategory.h" 2>/dev/null | sort -u | while read -r f; do
+            echo "=== $f ==="; cat "$f"
+          done
           echo "--- modulemaps under MediaPipeTasksVision ---"
           find Pods -iname "*.modulemap" -path "*MediaPipeTasksVision*" -exec cat {} \; 2>/dev/null
           echo "--- top-level layout of the MediaPipeTasksVision pod ---"

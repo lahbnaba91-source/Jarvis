@@ -60,8 +60,8 @@ public final class MediaPipeHandDetector: HandLandmarkDetecting {
 
     public func detect(in pixelBuffer: CVPixelBuffer, timestampMs: Int64) -> HandDetectionResult? {
         guard let image = try? MPImage(pixelBuffer: pixelBuffer) else { return nil }
-        guard let result = try? landmarker.detectForVideo(
-            image: image, timestampInMilliseconds: Int(timestampMs)) else {
+        guard let result = try? landmarker.detect(
+            videoFrame: image, timestampInMilliseconds: Int(timestampMs)) else {
             return nil
         }
 
