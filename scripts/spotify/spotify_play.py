@@ -32,7 +32,7 @@ STATE_DIR = HERE / ".state"
 CREDS_PATH = STATE_DIR / "creds.json"
 TOKEN_PATH = STATE_DIR / "refresh_token"
 
-REDIRECT_URI = "https://cuddly-space-doodle-4qwjpgpvqvgrhqgvq-8794.app.github.dev/spotify/callback"
+REDIRECT_URI = "https://jubilant-goldfish-5vxr5wvgqjjr2976-8794.app.github.dev/spotify/callback"
 SCOPES = "user-modify-playback-state user-read-playback-state"
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 
