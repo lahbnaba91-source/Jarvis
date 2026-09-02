@@ -17,6 +17,7 @@ const { exportLedger } = require('../ledger/export');
 const { status } = require('../policy/advisor');
 const spaceweather = require('../spaceweather');
 const { brief } = require('../brief');
+const { computeFlightDose } = require('../engine/dose');
 
 function json(res, code, body) {
   const payload = JSON.stringify(body);
@@ -79,8 +80,9 @@ function handle(req, res, options = {}) {
 
   if (!route.startsWith('/api/')) return false;
 
-  // /brief accepts POST because it takes a question, but it writes nothing.
-  if (req.method !== 'GET' && !(req.method === 'POST' && route === '/api/badge/brief')) {
+  // /brief and /project accept POST because they take inputs, but neither writes.
+  const postable = route === '/api/badge/brief' || route === '/api/badge/project';
+  if (req.method !== 'GET' && !(req.method === 'POST' && postable)) {
     json(res, 405, { error: 'This API is read-only. Writes arrive with the later phases.' });
     return true;
   }
@@ -168,6 +170,59 @@ function handle(req, res, options = {}) {
         });
       } else {
         respond(url.searchParams.get('q') || undefined);
+      }
+      return true;
+    }
+
+    // Projection: same computation as a logged flight, but nothing is recorded
+    // (brief §8 /project). The frontend never computes a dose, so the altitude
+    // slider calls this on every change (guardrail §13.8).
+    if (route === '/api/badge/project') {
+      const run = (body) => {
+        const altFt = Number(body.cruiseAltitudeFt);
+        const d = String(body.date || '');
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+        if (!body.origin || !body.destination || !m || !Number.isFinite(altFt)) {
+          json(res, 400, { error: 'project needs origin, destination, date (YYYY-MM-DD) and cruiseAltitudeFt' });
+          return;
+        }
+        computeFlightDose({
+          origin: body.origin,
+          destination: body.destination,
+          date: { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) },
+          cruiseAltitudeFt: altFt,
+        })
+          .then((result) => {
+            const db = store.open(dbPath);
+            const position = status(db, { policyId: body.policyId, now: body.asOf });
+            db.close();
+            json(res, 200, {
+              projection: result,
+              recorded: false,
+              note: 'Projection only. Nothing was written to the ledger.',
+              currentPosition: position.empty ? null : {
+                ytdGcrMSv: position.ytdGcrMSv,
+                pctOfAnnualLimit: position.pctOfAnnualLimit,
+                annualLimitMSv: position.annualLimitMSv,
+                policyId: position.policyId,
+              },
+            });
+          })
+          .catch((err) => json(res, 400, { error: err.message }));
+      };
+
+      if (req.method === 'POST') {
+        let raw = '';
+        req.on('data', (c) => { raw += c; if (raw.length > 8192) req.destroy(); });
+        req.on('end', () => { try { run(JSON.parse(raw || '{}')); } catch { json(res, 400, { error: 'bad JSON' }); } });
+      } else {
+        run({
+          origin: url.searchParams.get('origin'),
+          destination: url.searchParams.get('destination'),
+          date: url.searchParams.get('date'),
+          cruiseAltitudeFt: url.searchParams.get('cruiseAltitudeFt'),
+          asOf: url.searchParams.get('asOf') || undefined,
+        });
       }
       return true;
     }
