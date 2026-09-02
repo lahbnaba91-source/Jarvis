@@ -86,7 +86,7 @@ function check(name, cond, detail = '') {
   const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'badge-brief-')), 'ledger.db');
   const db = store.open(dbPath);
   const spec = { origin: 'OTBD', destination: 'KLAX', date: { year: 2023, month: 1, day: 20 }, cruiseAltitudeFt: 43000 };
-  store.append(db, computeFlightDose(spec), { spec });
+  store.append(db, await computeFlightDose(spec), { spec });
   db.close();
 
   const b = await brief({ dbPath, deterministicOnly: true });

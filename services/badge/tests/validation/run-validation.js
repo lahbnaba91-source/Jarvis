@@ -31,12 +31,12 @@ function padL(s, n) {
   return String(s).padStart(n);
 }
 
-function main() {
+async function main() {
   const date = parseDate(REF.conditions.dateUtc);
   const rows = [];
 
   for (const route of REF.routes) {
-    const result = computeFlightDose({
+    const result = await computeFlightDose({
       origin: route.origin,
       destination: route.destination,
       date,
