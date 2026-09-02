@@ -1,0 +1,25 @@
+{
+  "_source": "OurAirports public-domain database (davidmegginson.github.io/ourairports-data/airports.csv), retrieved 2026-09-01",
+  "airports": [
+    { "icao": "OTBD", "iata": "DIA", "name": "Doha International", "lat": 25.259431, "lon": 51.565528, "elevationFt": 35 },
+    { "icao": "KLAX", "iata": "LAX", "name": "Los Angeles International", "lat": 33.942501, "lon": -118.407997, "elevationFt": 125 },
+    { "icao": "OMAA", "iata": "AUH", "name": "Zayed International", "lat": 24.440966, "lon": 54.649237, "elevationFt": 88 },
+    { "icao": "OMDB", "iata": "DXB", "name": "Dubai International", "lat": 25.24979, "lon": 55.370992, "elevationFt": 62 },
+    { "icao": "OEJN", "iata": "JED", "name": "King Abdulaziz International", "lat": 21.680241, "lon": 39.157436, "elevationFt": 48 },
+    { "icao": "SCEL", "iata": "SCL", "name": "Arturo Merino Benitez International", "lat": -33.393002, "lon": -70.785797, "elevationFt": 1555 },
+    { "icao": "YSSY", "iata": "SYD", "name": "Sydney Kingsford Smith", "lat": -33.946098, "lon": 151.177002, "elevationFt": 21 },
+    { "icao": "WSSS", "iata": "SIN", "name": "Singapore Changi", "lat": 1.35019, "lon": 103.994003, "elevationFt": 22 },
+    { "icao": "KEWR", "iata": "EWR", "name": "Newark Liberty International", "lat": 40.6894, "lon": -74.170545, "elevationFt": 18 },
+    { "icao": "SAWG", "iata": "RGL", "name": "Piloto Civil Norberto Fernandez International", "lat": -51.608791, "lon": -69.308948, "elevationFt": 61 },
+    { "icao": "SAWB", "iata": "MBI", "name": "Gustavo Marambio (Marambio Base, Antarctica)", "lat": -64.238297, "lon": -56.630798, "elevationFt": 760 },
+    { "icao": "YPPH", "iata": "PER", "name": "Perth International", "lat": -31.9403, "lon": 115.967003, "elevationFt": 67 },
+    { "icao": "EGLL", "iata": "LHR", "name": "London Heathrow", "lat": 51.470748, "lon": -0.459909, "elevationFt": 83 },
+    { "icao": "FAOR", "iata": "JNB", "name": "O.R. Tambo International", "lat": -26.140081, "lon": 28.246801, "elevationFt": 5558 },
+    { "icao": "KATL", "iata": "ATL", "name": "Hartsfield Jackson Atlanta International", "lat": 33.6367, "lon": -84.428101, "elevationFt": 1026 },
+    { "icao": "NZAA", "iata": "AKL", "name": "Auckland International", "lat": -37.01199, "lon": 174.786331, "elevationFt": 23 },
+    { "icao": "KDFW", "iata": "DFW", "name": "Dallas Fort Worth International", "lat": 32.896801, "lon": -97.038002, "elevationFt": 607 },
+    { "icao": "KSFO", "iata": "SFO", "name": "San Francisco International", "lat": 37.619806, "lon": -122.374821, "elevationFt": 13 },
+    { "icao": "KIAH", "iata": "IAH", "name": "George Bush Intercontinental", "lat": 29.9844, "lon": -95.3414, "elevationFt": 97 },
+    { "icao": "RKSI", "iata": "ICN", "name": "Incheon International", "lat": 37.469101, "lon": 126.450996, "elevationFt": 23 }
+  ]
+}

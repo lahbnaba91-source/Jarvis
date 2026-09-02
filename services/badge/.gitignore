@@ -1,0 +1,11 @@
+vendor/PARMA/route_dose
+vendor/PARMA/a.out
+tests/validation/last-run.json
+
+# Ledger data and the export signing key never get committed.
+data/ledger.db
+data/ledger.db-journal
+data/signing-key.json
+
+# Cached SWPC data and the locally-accumulated proton archive.
+data/spaceweather/
