@@ -17,6 +17,8 @@ const { listPolicies, getPolicy } = require('./policy/limits');
 const { verify } = require('./ledger/verify');
 const { exportLedger } = require('./ledger/export');
 const { brief } = require('./brief');
+const adsb = require('./telemetry/adsb');
+const { computeTrackDose } = require('./engine/track-dose');
 
 const USAGE = `
 BADGE — modeled cosmic radiation dose ledger for aircrew (GCR only)
@@ -30,6 +32,7 @@ BADGE — modeled cosmic radiation dose ledger for aircrew (GCR only)
   node cli.js status [--policy=<id>]                        dose vs limits
   node cli.js policies                                      available limit policies
   node cli.js brief ["your question"]                       plain-language brief
+  node cli.js track <icao24|callsign> [--log]               dose a real ADS-B track
 
 Options
   --json              full structured result (dose / log)
@@ -43,7 +46,7 @@ Omitting the subcommand is treated as "dose", so the P1 form still works:
   node cli.js LAX ICN 2023-01-14 FL390
 `;
 
-const SUBCOMMANDS = new Set(['dose', 'log', 'ledger', 'verify', 'export', 'spaceweather', 'status', 'policies', 'brief', 'help']);
+const SUBCOMMANDS = new Set(['dose', 'log', 'ledger', 'verify', 'export', 'spaceweather', 'status', 'policies', 'brief', 'track', 'help']);
 
 function parseAltitude(token) {
   const t = String(token).toUpperCase();
@@ -357,6 +360,51 @@ function main(argv) {
     });
   }
 
+  if (command === 'track') {
+    if (!args.length) throw new Error('track needs an icao24 hex code or a callsign');
+    const query = args[0];
+
+    return (async () => {
+      let icao24 = /^[0-9a-f]{6}$/i.test(query) ? query.toLowerCase() : null;
+
+      if (!icao24) {
+        // Resolve a callsign against the live picture.
+        const live = await adsb.statesInBox();
+        const hit = live.states.find(
+          (s2) => s2.callsign && s2.callsign.toUpperCase() === query.toUpperCase()
+        );
+        if (!hit) throw new Error(`Callsign ${query} is not airborne right now (or not seen by OpenSky)`);
+        icao24 = hit.icao24;
+        console.log(`\n  resolved ${query} -> ${icao24}`);
+      }
+
+      const tr = await adsb.track(icao24);
+      const pts = adsb.toDoseTrack(tr.samples);
+      console.log(`  ${tr.callsign || icao24}: ${tr.samples.length} positions, ${pts.length} airborne`);
+      if (pts.length < 2) throw new Error('Not enough airborne positions to integrate');
+      console.log(`  window ${new Date(pts[0].t * 1000).toISOString()} -> ${new Date(pts[pts.length - 1].t * 1000).toISOString()}`);
+
+      const result = computeTrackDose(pts, {
+        callsign: tr.callsign, icao24,
+        g: flag('g') ? Number(flag('g')) : undefined,
+      });
+
+      if (flags.includes('--json')) return console.log(JSON.stringify(result, null, 2));
+      printResult(result);
+      const t = result.telemetry;
+      console.log(`  coverage             ${(t.coveredFraction * 100).toFixed(1)}% recorded, ${t.recordedSamples} real / ${t.interpolatedSamples} interpolated`);
+      console.log(`  gaps                 ${t.gaps}${t.gaps ? `, longest ${t.longestGapMinutes} min` : ''}`);
+      console.log(`  baro/geom            ${t.baroGeomDivergenceFt == null ? 'no geometric reference in track data' : Math.round(t.baroGeomDivergenceFt) + ' ft — ' + t.qualityFlag}`);
+
+      if (flags.includes('--log')) {
+        const db = store.open(dbPath);
+        const row = store.append(db, result, { spec: { icao24, callsign: tr.callsign, source: 'adsb' } });
+        console.log(`  recorded             ${row.id} (seq ${row.seq})`);
+      }
+      disclaimer();
+    })();
+  }
+
   if (command === 'export') {
     const db = store.open(dbPath);
     console.log(exportLedger(db, flag('format') || 'json'));
@@ -364,11 +412,18 @@ function main(argv) {
   }
 }
 
+function fail(err) {
+  console.error(`\n  ${err.message}\n`);
+  process.exit(1);
+}
+
 if (require.main === module) {
   try {
-    main(process.argv.slice(2));
+    // Subcommands that do network work return a promise; their rejections must
+    // land here too, not as an unhandled stack trace.
+    const maybe = main(process.argv.slice(2));
+    if (maybe && typeof maybe.catch === 'function') maybe.catch(fail);
   } catch (err) {
-    console.error(`\n  ${err.message}\n`);
-    process.exit(1);
+    fail(err);
   }
 }
