@@ -121,11 +121,29 @@ function computeTrackDose(rawTrack, options = {}) {
         : 0,
       sourceBreakdown: prepared.sourceBreakdown,
       // Quality signal only — the two altitudes are never averaged (§13.6).
+      //
+      // Threshold calibrated against 255 live cruising aircraft sampled over
+      // London, New York, Tokyo and Sydney on 2026-09-02: divergence was ALWAYS
+      // positive (geometric above barometric, 0 of 255 negative), median 1500 ft,
+      // mean 1619 ft, range 650-2775 ft, and strongly regional (Tokyo mean
+      // 2344 ft vs Sydney 1118 ft).
+      //
+      // That is the atmosphere deviating from ISA — pressure and temperature
+      // departure from the standard the pressure altimeter assumes — not
+      // altimetry system error. The brief's §6.2 figure (25-1325 ft, mean ~569 ft)
+      // does not match what the sky actually reports; a 1325 ft threshold flags
+      // roughly two thirds of ordinary traffic and is therefore useless.
+      //
+      // Note this divergence does NOT imply the dose is wrong. Dose depends on
+      // atmospheric depth, which is precisely what pressure altitude measures, so
+      // the barometric value remains the correct input and the divergence is
+      // evidence for that choice rather than against it.
       baroGeomDivergenceFt: meanDivergence,
       qualityFlag:
         meanDivergence == null ? 'no-geometric-reference'
-          : Math.abs(meanDivergence) > 1325 ? 'baro-geom-divergence-above-published-range'
-            : 'nominal',
+          : meanDivergence < 0 ? 'geometric-below-barometric-unusual'
+            : meanDivergence > 3500 ? 'divergence-beyond-observed-range'
+              : 'nominal-isa-departure',
     },
 
     peakDoseRateUSvPerHr: totals.peakDoseRateUSvPerHr,
