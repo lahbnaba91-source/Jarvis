@@ -82,7 +82,8 @@ async function getJson(path) {
 async function refresh() {
   try {
     const [status, sw, flights, chain] = await Promise.all([
-      getJson('/api/badge/status'),
+      getJson('/api/badge/status' + (new URLSearchParams(location.search).get('asOf')
+        ? `?asOf=${encodeURIComponent(new URLSearchParams(location.search).get('asOf'))}` : '')),
       getJson('/api/badge/spaceweather'),
       getJson('/api/badge/flights?limit=200'),
       getJson('/api/badge/verify'),
@@ -325,7 +326,8 @@ async function loadBrief(question) {
   textEl.textContent = 'generating…';
 
   try {
-    const res = await fetch('/api/badge/brief', {
+    const asOf = new URLSearchParams(location.search).get('asOf');
+    const res = await fetch('/api/badge/brief' + (asOf ? `?asOf=${encodeURIComponent(asOf)}` : ''), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: question || undefined }),

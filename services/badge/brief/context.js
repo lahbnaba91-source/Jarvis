@@ -12,7 +12,8 @@ const spaceweather = require('../spaceweather');
 
 function buildContext(options = {}) {
   const db = store.open(options.dbPath || store.DEFAULT_DB);
-  const advisor = status(db, { policyId: options.policyId });
+  // asOf must flow through, or the brief and the gauge can disagree on the same screen.
+  const advisor = status(db, { policyId: options.policyId, now: options.asOf });
   const superseded = store.supersededIds(db);
   const recent = store
     .list(db, { limit: 20 })
