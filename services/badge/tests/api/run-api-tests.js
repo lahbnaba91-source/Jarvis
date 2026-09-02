@@ -87,6 +87,27 @@ const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
   check('research export is de-identified',
     !('id' in research.body.records[0]) && 'route' in research.body.records[0]);
 
+  // --- projection (§8 /project) ---------------------------------------------
+  const projRes = await fetch(base + '/api/badge/project', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ origin: 'LAX', destination: 'ICN', date: '2023-03-15', cruiseAltitudeFt: 39000 }),
+  });
+  const proj = await projRes.json();
+  check('project returns a dose', projRes.status === 200 && proj.projection.dose.gcrMSv > 0);
+  // §8: same shape as a logged flight, but NOTHING is written.
+  check('project writes nothing to the ledger', proj.recorded === false);
+  const afterProject = await get('/api/badge/flights');
+  check('the ledger is unchanged after a projection', afterProject.body.flights.length === 2);
+  check('project compares against the current position', 'currentPosition' in proj);
+  check('project keeps GCR and SPE separate',
+    'gcrMSv' in proj.projection.dose && 'speMSv' in proj.projection.dose &&
+    !('totalMSv' in proj.projection.dose));
+  check('project carries the solar provenance', !!proj.projection.solarParams.source);
+  const badProj = await fetch(base + '/api/badge/project', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  check('project rejects incomplete input rather than guessing', badProj.status === 400);
+
   // --- read-only + safety ----------------------------------------------------
   const post = await fetch(base + '/api/badge/status', { method: 'POST' });
   check('writes are rejected, not silently ignored', post.status === 405);
@@ -121,6 +142,24 @@ const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
   check('dashboard loads no external scripts', !/<script[^>]+src=["']http/i.test(indexHtml));
   check('dashboard ships a font fallback stack rather than a webfont request',
     !/fonts\.googleapis|@font-face/.test(css) && /Orbitron/.test(css));
+
+  // §9.3: the detail screen's provenance panel is not optional, and the project
+  // screen's altitude slider must not compute dose in the browser.
+  check('detail screen renders a dose-rate chart', /doseRateChart/.test(appJs));
+  check('detail screen renders the track', /trackMap/.test(appJs));
+  check('provenance panel is built, not optional', /detail-prov/.test(appJs) && /entry hash/.test(appJs));
+  check('provenance shows coveredFraction and telemetry source',
+    /coveredFraction/.test(appJs) && /telemetry source/.test(appJs));
+  check('provenance shows GCR and SPE on separate rows',
+    /provRow\('GCR'/.test(appJs) && /provRow\('SPE'/.test(appJs));
+  check('altitude slider exists with 44px touch height',
+    /proj-alt/.test(indexHtml) && /\.slider \{[^}]*height: 44px/.test(css));
+  check('the slider asks the backend rather than computing locally',
+    /\/api\/badge\/project/.test(appJs) && !/gcrMSv\s*[*/]/.test(appJs));
+  check('projection result states it was not recorded', /NOT RECORDED/.test(appJs));
+  check('all five screens are present',
+    ['screen-now', 'screen-ledger', 'screen-detail', 'screen-project', 'screen-briefing']
+      .every((id) => indexHtml.includes(id)));
 
   // Mobile-first sizing the brief asks for.
   check('touch targets are at least 44px', /min-height:\s*44px/.test(css));
