@@ -12,6 +12,8 @@ const { computeFlightDose } = require('./engine/dose');
 const parma = require('./engine/parma');
 const store = require('./ledger/store');
 const spaceweather = require('./spaceweather');
+const { status } = require('./policy/advisor');
+const { listPolicies, getPolicy } = require('./policy/limits');
 const { verify } = require('./ledger/verify');
 const { exportLedger } = require('./ledger/export');
 
@@ -24,6 +26,8 @@ BADGE — modeled cosmic radiation dose ledger for aircrew (GCR only)
   node cli.js verify                                        check chain integrity
   node cli.js export [--format=json|csv|research]           export the ledger
   node cli.js spaceweather                                  current conditions
+  node cli.js status [--policy=<id>]                        dose vs limits
+  node cli.js policies                                      available limit policies
 
 Options
   --json              full structured result (dose / log)
@@ -37,7 +41,7 @@ Omitting the subcommand is treated as "dose", so the P1 form still works:
   node cli.js LAX ICN 2023-01-14 FL390
 `;
 
-const SUBCOMMANDS = new Set(['dose', 'log', 'ledger', 'verify', 'export', 'spaceweather', 'help']);
+const SUBCOMMANDS = new Set(['dose', 'log', 'ledger', 'verify', 'export', 'spaceweather', 'status', 'policies', 'help']);
 
 function parseAltitude(token) {
   const t = String(token).toUpperCase();
@@ -72,7 +76,14 @@ function printResult(result) {
   console.log('');
   console.log(`  GCR effective dose   ${d.gcrMSv.toFixed(4)} mSv   (${(d.gcrMSv * 1000).toFixed(1)} µSv)`);
   console.log(`  GCR H*(10)           ${d.gcrH10MSv.toFixed(4)} mSv`);
-  console.log(`  SPE                  not modeled (P4) — never merged into the GCR figure`);
+  if (d.speApplied && d.speMSv !== null && d.speMSv > 0) {
+    console.log(`  SPE contribution     ${d.speMSv.toFixed(4)} mSv  (band ${d.speMSvLow.toFixed(4)}–${d.speMSvHigh.toFixed(4)})`);
+    console.log(`                       confidence: ${d.speConfidence}, ${d.speMethod} — separate from GCR, never summed`);
+  } else if (d.speApplied) {
+    console.log(`  SPE contribution     0.0000 mSv — no proton event active in this window`);
+  } else {
+    console.log(`  SPE contribution     not determined — ${d.speReason}`);
+  }
   console.log('');
   console.log(`  peak rate            ${result.peakDoseRateUSvPerHr.toFixed(2)} µSv/h`);
   console.log(`  mean rate            ${result.meanDoseRateUSvPerHr.toFixed(2)} µSv/h`);
@@ -249,6 +260,78 @@ function main(argv) {
     console.log(`  archive              ${sw.archive.samples} samples${sw.archive.earliest ? `, ${sw.archive.earliest.slice(0, 10)} -> ${sw.archive.latest.slice(0, 10)}` : ''}`);
     console.log('');
     console.log(`  ${sw.disclaimer}`);
+    console.log('');
+    return;
+  }
+
+
+  if (command === 'policies') {
+    console.log('');
+    for (const p of listPolicies()) {
+      const full = getPolicy(p.policyId);
+      console.log(`  ${p.policyId}`);
+      console.log(`    ${p.label}`);
+      console.log(`    ${full.annualLimitMSv} mSv/yr` +
+        (full.averagingWindowYears ? ` averaged over ${full.averagingWindowYears} yr` : '') +
+        (full.singleYearCeilingMSv ? `, ${full.singleYearCeilingMSv} mSv single-year ceiling` : ''));
+      if (full.pregnancy) {
+        const preg = [];
+        if (full.pregnancy.monthlyMaxMSv) preg.push(`${full.pregnancy.monthlyMaxMSv} mSv/month`);
+        if (full.pregnancy.totalMSv) preg.push(`${full.pregnancy.totalMSv} mSv term total`);
+        if (preg.length) console.log(`    pregnancy: ${preg.join(', ')} — ${full.pregnancy.basis}`);
+      }
+      console.log(`    source: ${full.source}`);
+      if (full.caveat) console.log(`    note: ${full.caveat}`);
+      console.log('');
+    }
+    console.log('  All policies are marked verifyBeforeUse — confirm against the primary');
+    console.log('  source before relying on them for a real decision.');
+    console.log('');
+    return;
+  }
+
+  if (command === 'status') {
+    const db = store.open(dbPath);
+    const s2 = status(db, { policyId: flag('policy') });
+    if (flags.includes('--json')) return console.log(JSON.stringify(s2, null, 2));
+
+    console.log('');
+    if (s2.empty) {
+      console.log(`  ${s2.note}  (policy: ${s2.policyLabel})\n`);
+      return;
+    }
+
+    const pct = s2.pctOfAnnualLimit;
+    const filled = Math.min(30, Math.round((pct / 100) * 30));
+    const gauge = '#'.repeat(filled).padEnd(30, '.');
+
+    console.log(`  ${s2.policyLabel}`);
+    console.log(`  limit ${s2.annualLimitMSv} mSv/yr averaged over ${s2.averagingWindowYears} yr` +
+      (s2.singleYearCeilingMSv ? `, ${s2.singleYearCeilingMSv} mSv single-year ceiling` : ''));
+    console.log('');
+    console.log(`  YTD GCR              ${s2.ytdGcrMSv.toFixed(4)} mSv`);
+    console.log(`  [${gauge}] ${pct.toFixed(1)}% of annual limit`);
+    console.log('');
+    console.log(`  rolling 12 months    ${s2.rolling12moGcrMSv.toFixed(4)} mSv`);
+    console.log(`  ${String(s2.averagingWindowYears)}-yr window average    ${s2.windowAverageGcrMSv.toFixed(4)} mSv/yr  (${s2.pctOfWindowAverage.toFixed(1)}% of limit)`);
+    console.log(`  projected year-end   ${s2.projectedYearEndGcrMSv.toFixed(4)} mSv`);
+    console.log(`  breach risk          ${s2.breachRisk}` +
+      (s2.daysToThreshold !== null ? `   (~${s2.daysToThreshold} days to limit at current pace)` : ''));
+    console.log('');
+    console.log(`  YTD SPE              ${s2.ytdSpeMSv.toFixed(4)} mSv   ${s2.speNote}`);
+    console.log('');
+    console.log(`  flights logged       ${s2.flightsLogged}   ${JSON.stringify(s2.confidenceBreakdown)}`);
+    console.log(`  mean uncertainty     ${s2.meanUncertaintyPct === null ? s2.uncertaintyNote : s2.meanUncertaintyPct.toFixed(1) + '%'}`);
+    console.log('');
+    console.log('  highest-dose flights');
+    for (const t of s2.topContributors) {
+      console.log(`    ${t.dateUtc}  ${t.route.padEnd(11)} ${t.gcrMSv.toFixed(4)} mSv   ${t.confidence} / ${t.telemetrySource}`);
+    }
+    console.log('');
+    console.log(`  policy source: ${s2.policySource}`);
+    if (s2.verifyBeforeUse) console.log('  Verify this limit against the primary source before acting on it.');
+    console.log('');
+    console.log(`  ${s2.disclaimer}`);
     console.log('');
     return;
   }
