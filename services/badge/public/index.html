@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>BADGE — aircrew dose ledger</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div id="offline-banner" class="offline-banner" hidden>
+  BACKEND OFFLINE — showing data from <span id="offline-stamp"></span>
+</div>
+
+<header class="topbar">
+  <div class="brand">BADGE</div>
+  <button id="refresh" class="refresh" type="button" aria-label="Refresh">REFRESH</button>
+</header>
+
+<main>
+  <!-- ============================= NOW ============================= -->
+  <section id="screen-now" class="screen">
+
+    <div class="card space-weather" id="sw-card">
+      <div class="card-head">
+        <h2>SPACE WEATHER</h2>
+        <span id="sw-staleness" class="badge badge-muted">—</span>
+      </div>
+      <div id="sw-body" class="loading">loading…</div>
+    </div>
+
+    <div class="card gauge-card">
+      <div class="card-head"><h2>YEAR TO DATE</h2><span id="policy-chip" class="badge badge-muted">—</span></div>
+      <div id="gauge-wrap" class="gauge-wrap loading">loading…</div>
+      <div id="projection" class="projection"></div>
+    </div>
+
+    <div class="card brief-card">
+      <div class="card-head"><h2>JARVIS BRIEF</h2><span class="badge badge-muted">P6</span></div>
+      <p class="pending">
+        The plain-language brief arrives in P6. It will read from the same numbers shown
+        above — it never computes a dose of its own.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>LAST FLIGHT</h2></div>
+      <div id="last-flight" class="loading">loading…</div>
+    </div>
+
+  </section>
+
+  <!-- ============================ LEDGER =========================== -->
+  <section id="screen-ledger" class="screen" hidden>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>LEDGER</h2>
+        <span id="chain-state" class="badge badge-muted">—</span>
+      </div>
+      <div class="filters">
+        <input id="search" type="search" placeholder="Search route…" autocomplete="off">
+        <select id="filter-year"><option value="">All years</option></select>
+        <select id="filter-conf">
+          <option value="">All confidence</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      <div class="export-row">
+        <a class="btn" href="/api/badge/export?format=json" download>Export JSON</a>
+        <a class="btn" href="/api/badge/export?format=csv" download>Export CSV</a>
+        <a class="btn" href="/api/badge/export?format=research" download>Research</a>
+      </div>
+    </div>
+
+    <div id="ledger-list" class="loading">loading…</div>
+
+  </section>
+</main>
+
+<footer class="disclaimer">
+  Modeled estimate against published reference limits. Not a dosimetry record of legal
+  standing, not a dosimeter reading, and not medical advice — discuss with your AME.
+</footer>
+
+<nav class="tabbar">
+  <button class="tab active" data-screen="now" type="button">NOW</button>
+  <button class="tab" data-screen="ledger" type="button">LEDGER</button>
+</nav>
+
+<script src="/app.js"></script>
+</body>
+</html>
