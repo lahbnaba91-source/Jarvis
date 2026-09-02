@@ -1,0 +1,272 @@
+/* BADGE dashboard — JARVIS HUD palette, but legibility beats theatre (brief §9.2).
+   Amber is chrome and accent only; every number the user has to trust renders in a
+   plain high-contrast sans. Mobile-first at ~380px. */
+
+:root {
+  --bg:        #0a0a0a;
+  --panel:     #121212;
+  --amber:     #ffb000;
+  --amber-dim: #7a5400;
+  --text:      #e8e8e8;
+  --muted:     #8a8a8a;
+  --ok:        #3fb950;
+  --warn:      #d29922;
+  --alert:     #f85149;
+  --low-conf:  #6e7681;
+
+  --display: "Orbitron", "Eurostile", "Bank Gothic", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ---------- offline ---------- */
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--amber);
+  color: #000;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  text-align: center;
+}
+
+/* ---------- chrome ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 6px;
+}
+.brand {
+  font-family: var(--display);
+  font-size: 1.3rem;
+  letter-spacing: 0.22em;
+  color: var(--amber);
+}
+.refresh {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1px solid var(--amber-dim);
+  color: var(--amber);
+  font-family: var(--display);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  border-radius: 4px;
+}
+.refresh:active { background: var(--amber-dim); }
+
+main { padding: 0 12px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  padding: 14px;
+  margin: 10px 0;
+}
+.brief-card { border-color: var(--amber-dim); }
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.card-head h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.loading, .pending { color: var(--muted); font-size: 0.85rem; margin: 0; }
+
+/* ---------- badges / chips ---------- */
+.badge {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 3px 7px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.badge-muted { color: var(--muted); }
+.badge-live  { color: var(--ok); }
+.badge-stale { color: var(--warn); }
+.badge-ok    { color: var(--ok); }
+.badge-warn  { color: var(--warn); }
+.badge-alert { color: var(--alert); }
+.badge-lowconf { color: var(--low-conf); }
+
+/* ---------- space weather ---------- */
+.sw-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+.sw-item { min-width: 0; }
+.sw-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.sw-value {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  margin-top: 2px;
+}
+.sw-note { font-size: 0.62rem; color: var(--muted); }
+
+.risk-row { grid-column: 1 / -1; margin-top: 4px; }
+.risk-track {
+  height: 10px;
+  background: #1c1c1c;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.risk-fill { height: 100%; border-radius: 5px; }
+.risk-method { font-size: 0.62rem; color: var(--muted); margin-top: 5px; }
+
+/* ---------- gauge ---------- */
+.gauge-wrap { display: flex; justify-content: center; }
+.gauge { width: 100%; max-width: 260px; }
+.gauge-pct {
+  font-family: var(--mono);
+  font-size: 2.4rem;
+  font-weight: 600;
+}
+.gauge-sub { font-family: var(--mono); font-size: 0.85rem; fill: var(--muted); }
+.gauge-limit { font-size: 0.62rem; fill: var(--muted); }
+
+.projection {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+.projection .k { color: var(--muted); }
+
+/* ---------- flights ---------- */
+.flight-row {
+  background: var(--panel);
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 8px 0;
+  min-height: 44px;
+}
+.flight-row.superseded { opacity: 0.55; }
+.flight-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.flight-route { font-family: var(--mono); font-size: 1rem; }
+.flight-dose { font-family: var(--mono); font-size: 1rem; white-space: nowrap; }
+.flight-meta {
+  margin-top: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+/* Low-confidence data must not look like recorded data (guardrail §9.4.5). */
+.low-confidence .flight-route,
+.low-confidence .flight-dose { color: var(--low-conf); }
+
+.spe-line { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-top: 5px; }
+
+/* ---------- filters / buttons ---------- */
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.filters input, .filters select {
+  flex: 1 1 30%;
+  min-height: 44px;
+  background: #0d0d0d;
+  border: 1px solid #262626;
+  color: var(--text);
+  border-radius: 5px;
+  padding: 0 10px;
+  font-size: 0.85rem;
+  font-family: var(--sans);
+}
+.export-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--amber-dim);
+  border-radius: 5px;
+  color: var(--amber);
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-family: var(--display);
+  letter-spacing: 0.08em;
+}
+.btn[aria-disabled="true"] { opacity: 0.4; pointer-events: none; }
+
+/* ---------- footer / tabs ---------- */
+.disclaimer {
+  padding: 16px 18px 8px;
+  font-size: 0.68rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: #0d0d0d;
+  border-top: 1px solid #1e1e1e;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 15;
+}
+.tab {
+  flex: 1;
+  min-height: 56px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+}
+.tab.active { color: var(--amber); box-shadow: inset 0 2px 0 var(--amber); }
+
+@media (min-width: 720px) {
+  .tabbar { max-width: 720px; margin: 0 auto; }
+}
