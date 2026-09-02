@@ -16,6 +16,7 @@ const { verify } = require('../ledger/verify');
 const { exportLedger } = require('../ledger/export');
 const { status } = require('../policy/advisor');
 const spaceweather = require('../spaceweather');
+const { brief } = require('../brief');
 
 function json(res, code, body) {
   const payload = JSON.stringify(body);
@@ -78,8 +79,9 @@ function handle(req, res, options = {}) {
 
   if (!route.startsWith('/api/')) return false;
 
-  if (req.method !== 'GET') {
-    json(res, 405, { error: 'This API is read-only in P5. Writes arrive with the later phases.' });
+  // /brief accepts POST because it takes a question, but it writes nothing.
+  if (req.method !== 'GET' && !(req.method === 'POST' && route === '/api/badge/brief')) {
+    json(res, 405, { error: 'This API is read-only. Writes arrive with the later phases.' });
     return true;
   }
 
@@ -133,6 +135,29 @@ function handle(req, res, options = {}) {
         inputs: JSON.parse(row.inputs_json),
         prevHash: row.prev_hash,
       });
+      return true;
+    }
+
+    if (route === '/api/badge/brief') {
+      const respond = (question) => {
+        brief({ dbPath, question, deterministicOnly: url.searchParams.get('deterministic') === '1' })
+          .then((body) => json(res, 200, body))
+          .catch((err) => json(res, 500, { error: err.message }));
+      };
+      if (req.method === 'POST') {
+        let raw = '';
+        req.on('data', (c) => {
+          raw += c;
+          if (raw.length > 8192) req.destroy();
+        });
+        req.on('end', () => {
+          let question;
+          try { question = JSON.parse(raw || '{}').question; } catch { question = undefined; }
+          respond(typeof question === 'string' ? question.slice(0, 500) : undefined);
+        });
+      } else {
+        respond(url.searchParams.get('q') || undefined);
+      }
       return true;
     }
 

@@ -2,7 +2,7 @@
   "name": "badge",
   "version": "0.1.0",
   "private": true,
-  "description": "BADGE \u2014 personal radiation dose ledger for aircrew. P1 dose core, P2 ledger, P3 space weather, P4 SPE + policy, P5 dashboard.",
+  "description": "BADGE \u2014 personal radiation dose ledger for aircrew. P1\u2013P6: dose core, ledger, space weather, SPE + policy, dashboard, brief layer.",
   "main": "engine/dose.js",
   "scripts": {
     "build": "engine/native/build.sh",
@@ -13,14 +13,16 @@
     "export": "node --no-warnings cli.js export",
     "validate": "node tests/validation/run-validation.js",
     "test:ledger": "node --no-warnings tests/ledger/run-ledger-tests.js",
-    "test": "node tests/validation/run-validation.js && node --no-warnings tests/ledger/run-ledger-tests.js && node --no-warnings tests/spaceweather/run-spaceweather-tests.js && node --no-warnings tests/policy/run-policy-tests.js && node --no-warnings tests/api/run-api-tests.js",
+    "test": "node tests/validation/run-validation.js && node --no-warnings tests/ledger/run-ledger-tests.js && node --no-warnings tests/spaceweather/run-spaceweather-tests.js && node --no-warnings tests/policy/run-policy-tests.js && node --no-warnings tests/api/run-api-tests.js && node --no-warnings tests/brief/run-brief-tests.js",
     "spaceweather": "node --no-warnings cli.js spaceweather",
     "poll": "node --no-warnings spaceweather/poller.js",
     "test:spaceweather": "node --no-warnings tests/spaceweather/run-spaceweather-tests.js",
     "status": "node --no-warnings cli.js status",
     "test:policy": "node --no-warnings tests/policy/run-policy-tests.js",
     "start": "node --no-warnings server.js",
-    "test:api": "node --no-warnings tests/api/run-api-tests.js"
+    "test:api": "node --no-warnings tests/api/run-api-tests.js",
+    "brief": "node --no-warnings cli.js brief",
+    "test:brief": "node --no-warnings tests/brief/run-brief-tests.js"
   },
   "engines": {
     "node": ">=22"

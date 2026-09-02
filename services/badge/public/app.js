@@ -307,6 +307,51 @@ function populateYears() {
   sel.value = current;
 }
 
+async function loadBrief(question) {
+  const textEl = $('brief-text');
+  const srcEl = $('brief-source');
+  const provEl = $('brief-provenance');
+
+  if (state.offline) {
+    textEl.className = 'loading';
+    textEl.textContent = 'The brief needs the backend. Reconnect to generate one.';
+    srcEl.textContent = 'offline';
+    srcEl.className = 'badge badge-stale';
+    provEl.textContent = '';
+    return;
+  }
+
+  textEl.className = 'loading';
+  textEl.textContent = 'generating…';
+
+  try {
+    const res = await fetch('/api/badge/brief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question || undefined }),
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const b = await res.json();
+
+    textEl.className = '';
+    textEl.textContent = b.text;
+    srcEl.textContent = b.source === 'llm' ? 'LLM · VERIFIED' : 'DETERMINISTIC';
+    srcEl.className = `badge ${b.source === 'llm' ? 'badge-ok' : 'badge-muted'}`;
+
+    // The provenance of the words is part of the output, not a footnote.
+    const bits = [];
+    if (b.note) bits.push(b.note);
+    if (b.guard) bits.push(`numeral guard: ${b.guard.checked} checked, ${b.guard.unsupported.length} unsupported`);
+    provEl.textContent = bits.join(' · ');
+  } catch (err) {
+    textEl.className = 'loading';
+    textEl.textContent = 'Brief unavailable.';
+    srcEl.textContent = 'error';
+    srcEl.className = 'badge badge-stale';
+    provEl.textContent = '';
+  }
+}
+
 function renderAll() {
   renderSpaceWeather();
   renderGauge();
@@ -327,7 +372,11 @@ document.querySelectorAll('.tab').forEach((tab) => {
   });
 });
 
-$('refresh').addEventListener('click', refresh);
+$('refresh').addEventListener('click', () => { refresh(); loadBrief(); });
+$('brief-go').addEventListener('click', () => loadBrief($('brief-q').value.trim()));
+$('brief-q').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loadBrief($('brief-q').value.trim());
+});
 ['search', 'filter-year', 'filter-conf'].forEach((id) =>
   $(id).addEventListener('input', renderLedger));
 
@@ -340,4 +389,4 @@ if (boot) {
   state.chain = boot.chain;
   renderAll();
 }
-refresh();
+refresh().then(() => loadBrief());
