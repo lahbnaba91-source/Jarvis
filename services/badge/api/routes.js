@@ -90,7 +90,13 @@ function handle(req, res, options = {}) {
   try {
     if (route === '/api/badge/status') {
       const db = store.open(dbPath);
-      const body = status(db, { policyId: url.searchParams.get('policy') || undefined });
+      const body = status(db, {
+        policyId: url.searchParams.get('policy') || undefined,
+        // asOf lets the position be reviewed at a past date. Necessary today
+        // because PARMA's solar data ends 2023-05-03, so a 2026 "now" has no
+        // computable flights and the headline figure would always read zero.
+        now: url.searchParams.get('asOf') || undefined,
+      });
       db.close();
       json(res, 200, body);
       return true;
@@ -140,7 +146,12 @@ function handle(req, res, options = {}) {
 
     if (route === '/api/badge/brief') {
       const respond = (question) => {
-        brief({ dbPath, question, deterministicOnly: url.searchParams.get('deterministic') === '1' })
+        brief({
+          dbPath,
+          question,
+          asOf: url.searchParams.get('asOf') || undefined,
+          deterministicOnly: url.searchParams.get('deterministic') === '1',
+        })
           .then((body) => json(res, 200, body))
           .catch((err) => json(res, 500, { error: err.message }));
       };

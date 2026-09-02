@@ -11,6 +11,7 @@ const api = require('./api/routes');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const DB_PATH = process.env.BADGE_DB || undefined;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -47,7 +48,7 @@ function serveStatic(req, res) {
 }
 
 const server = http.createServer((req, res) => {
-  if (api.handle(req, res)) return;
+  if (api.handle(req, res, { dbPath: DB_PATH })) return;
   serveStatic(req, res);
 });
 
@@ -55,6 +56,7 @@ if (require.main === module) {
   // 0.0.0.0, not loopback — Codespaces cannot forward a loopback-only listener.
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`BADGE on ${PORT} (bound 0.0.0.0)`);
+    if (DB_PATH) console.log(`Ledger: ${DB_PATH}`);
     const cs = process.env.CODESPACE_NAME;
     if (cs) {
       const domain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || 'app.github.dev';
