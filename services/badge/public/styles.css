@@ -270,3 +270,20 @@ main { padding: 0 12px; }
 @media (min-width: 720px) {
   .tabbar { max-width: 720px; margin: 0 auto; }
 }
+
+/* ---------- brief ---------- */
+#brief-text { font-size: 0.92rem; line-height: 1.65; color: var(--text); margin: 0; }
+.brief-provenance { font-size: 0.65rem; color: var(--muted); margin: 10px 0 0; line-height: 1.5; }
+.brief-ask { display: flex; gap: 8px; margin-top: 12px; }
+.brief-ask input {
+  flex: 1;
+  min-height: 44px;
+  background: #0d0d0d;
+  border: 1px solid #262626;
+  color: var(--text);
+  border-radius: 5px;
+  padding: 0 10px;
+  font-size: 0.85rem;
+  font-family: var(--sans);
+}
+.brief-ask .btn { border: 1px solid var(--amber-dim); background: transparent; cursor: pointer; }

@@ -37,11 +37,16 @@
     </div>
 
     <div class="card brief-card">
-      <div class="card-head"><h2>JARVIS BRIEF</h2><span class="badge badge-muted">P6</span></div>
-      <p class="pending">
-        The plain-language brief arrives in P6. It will read from the same numbers shown
-        above — it never computes a dose of its own.
-      </p>
+      <div class="card-head">
+        <h2>JARVIS BRIEF</h2>
+        <span id="brief-source" class="badge badge-muted">—</span>
+      </div>
+      <p id="brief-text" class="loading">loading…</p>
+      <p id="brief-provenance" class="brief-provenance"></p>
+      <div class="brief-ask">
+        <input id="brief-q" type="text" placeholder="Ask about your exposure…" autocomplete="off">
+        <button id="brief-go" class="btn" type="button">ASK</button>
+      </div>
     </div>
 
     <div class="card">

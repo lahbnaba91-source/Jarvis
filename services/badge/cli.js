@@ -16,6 +16,7 @@ const { status } = require('./policy/advisor');
 const { listPolicies, getPolicy } = require('./policy/limits');
 const { verify } = require('./ledger/verify');
 const { exportLedger } = require('./ledger/export');
+const { brief } = require('./brief');
 
 const USAGE = `
 BADGE — modeled cosmic radiation dose ledger for aircrew (GCR only)
@@ -28,6 +29,7 @@ BADGE — modeled cosmic radiation dose ledger for aircrew (GCR only)
   node cli.js spaceweather                                  current conditions
   node cli.js status [--policy=<id>]                        dose vs limits
   node cli.js policies                                      available limit policies
+  node cli.js brief ["your question"]                       plain-language brief
 
 Options
   --json              full structured result (dose / log)
@@ -41,7 +43,7 @@ Omitting the subcommand is treated as "dose", so the P1 form still works:
   node cli.js LAX ICN 2023-01-14 FL390
 `;
 
-const SUBCOMMANDS = new Set(['dose', 'log', 'ledger', 'verify', 'export', 'spaceweather', 'status', 'policies', 'help']);
+const SUBCOMMANDS = new Set(['dose', 'log', 'ledger', 'verify', 'export', 'spaceweather', 'status', 'policies', 'brief', 'help']);
 
 function parseAltitude(token) {
   const t = String(token).toUpperCase();
@@ -334,6 +336,25 @@ function main(argv) {
     console.log(`  ${s2.disclaimer}`);
     console.log('');
     return;
+  }
+
+  if (command === 'brief') {
+    return brief({
+      dbPath,
+      question: args.join(' ') || undefined,
+      deterministicOnly: flags.includes('--deterministic'),
+    }).then((b) => {
+      if (flags.includes('--json')) return console.log(JSON.stringify(b, null, 2));
+      console.log('');
+      console.log('  ' + b.text.replace(/(.{1,76})(\s|$)/g, '$1\n  ').trim());
+      console.log('');
+      console.log(`  source: ${b.source}${b.model ? ' (' + b.model + ')' : ''}`);
+      if (b.note) console.log(`  ${b.note}`);
+      if (b.guard) console.log(`  numeral guard: ${b.guard.checked} checked, ${b.guard.unsupported.length} unsupported`);
+      console.log('');
+      console.log(`  ${b.disclaimer}`);
+      console.log('');
+    });
   }
 
   if (command === 'export') {
