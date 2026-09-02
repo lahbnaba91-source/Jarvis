@@ -183,6 +183,27 @@ function append(db, result, options = {}) {
   return row;
 }
 
+// Reading the chain head and appending must be one atomic step. Two processes
+// sharing a ledger file can otherwise both read head N and both write N+1 — the
+// UNIQUE constraint catches the collision, but the loser needs to re-read the head
+// and rebuild its hash link rather than fail. BEGIN IMMEDIATE takes the write lock
+// up front so the read-then-write is serialized.
+function appendAtomic(db, result, options = {}, attempt = 0) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = append(db, result, options);
+    db.exec('COMMIT');
+    return row;
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+    const collision = /UNIQUE constraint failed: ledger_entries\.(seq|entry_hash)/.test(err.message);
+    if (collision && attempt < 5) {
+      return appendAtomic(db, result, options, attempt + 1);
+    }
+    throw err;
+  }
+}
+
 function list(db, { limit = 50, from, to } = {}) {
   const where = [];
   const params = [];
@@ -210,6 +231,6 @@ function supersededIds(db) {
 }
 
 module.exports = {
-  open, append, list, get, all, head, supersededIds,
+  open, append: appendAtomic, appendUnsafe: append, list, get, all, head, supersededIds,
   hashableFrom, HASHED_FIELDS, DEFAULT_DB, newId,
 };
