@@ -1,0 +1,40 @@
+{
+  "referenceSet": "quinonez-2019-cari7a-fl430",
+  "oracle": "CARI-7A (FAA CAMI), ICRP-103 effective dose and ICRU H*(10)",
+  "citation": "F. Quinonez, L. A. Nunez, E. A. Casallas, V. S. Basto-Gonzalez, J. L. Gonzalez-Arango, P. A. Ospina-Henao, A. J. Hernandez-Goez, C. Y. Perez-Arias, 'Radiation Dose Charts for Long Geodetic and Polar Flights with CARI-7A', arXiv:1812.02073v3 (2019), Table 5.",
+  "sourceUrl": "https://arxiv.org/abs/1812.02073",
+  "conditions": {
+    "dateUtc": "2018-03-01",
+    "note": "Paper states all calculations were made for March 1, 2018 (solar minimum).",
+    "cruiseAltitudeFt": 43000,
+    "gcrModel": "CARI-7A option 4, ISO TS15390:2004-MSU-NYMMIK",
+    "shielding": "none — free-air phantom, paper explicitly excludes aircraft shielding",
+    "climbRateFtPerMin": 2300,
+    "rampSpeedFactor": 0.54
+  },
+  "knownDifferences": [
+    "Independent GCR models: CARI-7A uses ISO TS15390 MSU-NYMMIK, BADGE uses PARMA 4.10 (Sato). Exact agreement is not expected and would be suspicious.",
+    "The paper resolved routes as WGS84 geodesics via INVERSE3D; BADGE P1 uses a spherical great circle.",
+    "The paper's dose quantity is CARI-7A ICRP-103 effective dose; BADGE reports PARMA's ICRP-116 isotropic effective dose. Related but not identical definitions.",
+    "WSSS-KEWR and KEWR-WSSS were flown as different real routings (Pacific vs Atlantic side) in the paper. A great-circle model returns one identical path for both directions, so one of the two will always deviate.",
+    "BADGE holds the UTC date constant across the flight; the paper's flights also span more than one calendar day."
+  ],
+  "routes": [
+    { "id": "OTBD-KLAX", "origin": "OTBD", "destination": "KLAX", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 126.300, "referenceH10USv": 136.100, "referenceDurationHours": 15.472, "polar": true },
+    { "id": "OMAA-KLAX", "origin": "OMAA", "destination": "KLAX", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 128.500, "referenceH10USv": 138.490, "referenceDurationHours": 15.750, "polar": true },
+    { "id": "OMDB-KLAX", "origin": "OMDB", "destination": "KLAX", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 127.570, "referenceH10USv": 137.460, "referenceDurationHours": 15.714, "polar": true },
+    { "id": "OEJN-KLAX", "origin": "OEJN", "destination": "KLAX", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 121.530, "referenceH10USv": 130.560, "referenceDurationHours": 15.465, "polar": true },
+    { "id": "SCEL-YSSY", "origin": "SCEL", "destination": "YSSY", "aircraft": "B787", "cruiseSpeedKmh": 913, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 99.074, "referenceH10USv": 105.900, "referenceDurationHours": 13.043, "polar": true },
+    { "id": "WSSS-KEWR", "origin": "WSSS", "destination": "KEWR", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 124.860, "referenceH10USv": 133.470, "referenceDurationHours": 17.664, "polar": false },
+    { "id": "KEWR-WSSS", "origin": "KEWR", "destination": "WSSS", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 122.390, "referenceH10USv": 130.060, "referenceDurationHours": 18.511, "polar": false },
+    { "id": "SAWG-SAWB", "origin": "SAWG", "destination": "SAWB", "aircraft": "C-130", "cruiseSpeedKmh": 540, "climbRateFtPerMin": 1830, "referenceEffectiveUSv": 20.851, "referenceH10USv": 22.116, "referenceDurationHours": 3.2159, "polar": true },
+    { "id": "KLAX-WSSS", "origin": "KLAX", "destination": "WSSS", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 76.093, "referenceH10USv": 77.940, "referenceDurationHours": 16.194, "polar": false },
+    { "id": "YPPH-EGLL", "origin": "YPPH", "destination": "EGLL", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 70.481, "referenceH10USv": 71.672, "referenceDurationHours": 16.317, "polar": false },
+    { "id": "FAOR-KATL", "origin": "FAOR", "destination": "KATL", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 63.327, "referenceH10USv": 63.974, "referenceDurationHours": 15.231, "polar": false },
+    { "id": "KDFW-YSSY", "origin": "KDFW", "destination": "YSSY", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 66.840, "referenceH10USv": 67.386, "referenceDurationHours": 16.545, "polar": false },
+    { "id": "NZAA-OTBD", "origin": "NZAA", "destination": "OTBD", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 65.569, "referenceH10USv": 66.293, "referenceDurationHours": 16.179, "polar": false },
+    { "id": "NZAA-OMDB", "origin": "NZAA", "destination": "OMDB", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 67.147, "referenceH10USv": 67.965, "referenceDurationHours": 16.333, "polar": false },
+    { "id": "KSFO-WSSS", "origin": "KSFO", "destination": "WSSS", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 65.079, "referenceH10USv": 65.771, "referenceDurationHours": 15.788, "polar": false },
+    { "id": "KIAH-YSSY", "origin": "KIAH", "destination": "YSSY", "aircraft": "A380/B777", "cruiseSpeedKmh": 907, "climbRateFtPerMin": 2300, "referenceEffectiveUSv": 64.382, "referenceH10USv": 64.691, "referenceDurationHours": 16.366, "polar": false }
+  ]
+}
