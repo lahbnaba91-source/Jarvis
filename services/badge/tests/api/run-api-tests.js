@@ -33,7 +33,8 @@ const css = fs.readFileSync(path.join(PUBLIC, 'styles.css'), 'utf8');
     { origin: 'OTBD', destination: 'KLAX', date: { year: 2023, month: 1, day: 20 }, cruiseAltitudeFt: 43000 },
     { origin: 'YPPH', destination: 'EGLL', date: { year: 2023, month: 2, day: 14 }, cruiseAltitudeFt: 39000 },
   ];
-  const rows = specs.map((s) => store.append(db, computeFlightDose(s), { spec: s }));
+  const rows = [];
+  for (const s of specs) rows.push(store.append(db, await computeFlightDose(s), { spec: s }));
   db.close();
 
   const server = http.createServer((req, res) => {
