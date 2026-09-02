@@ -240,7 +240,7 @@ function flightRow(f) {
       : `<div class="spe-line">SPE: none active</div>`;
 
   return `
-    <article class="flight-row ${lowConf ? 'low-confidence' : ''} ${f.superseded ? 'superseded' : ''}">
+    <article class="flight-row ${lowConf ? 'low-confidence' : ''} ${f.superseded ? 'superseded' : ''}" data-flight-id="${esc(f.id)}">
       <div class="flight-top">
         <span class="flight-route">${esc(f.route)}</span>
         <span class="flight-dose">${mSv(f.dose.gcrMSv)}</span>
@@ -362,16 +362,268 @@ function renderAll() {
   renderLedger();
 }
 
+
+/* --------------------------------------------------------- flight detail */
+
+// All charting is geometry over numbers the backend already computed. No dose
+// value is derived, rescaled or combined here (guardrail §13.8).
+function svgEl(inner, viewBox, cls = '') {
+  return `<svg viewBox="${viewBox}" class="${cls}" preserveAspectRatio="none" role="img">${inner}</svg>`;
+}
+
+function doseRateChart(samples) {
+  const W = 340, H = 170, padL = 34, padR = 30, padT = 10, padB = 22;
+  const rates = samples.map((s) => s.effUSvPerHr);
+  const alts = samples.map((s) => s.altFt);
+  const ts = samples.map((s) => s.tHours);
+
+  const maxRate = Math.max(...rates), maxAlt = Math.max(...alts), maxT = Math.max(...ts) || 1;
+  const x = (t) => padL + (t / maxT) * (W - padL - padR);
+  const yRate = (r) => H - padB - (maxRate ? r / maxRate : 0) * (H - padT - padB);
+  const yAlt = (a) => H - padB - (maxAlt ? a / maxAlt : 0) * (H - padT - padB);
+
+  const line = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const dosePath = line(samples.map((s) => [x(s.tHours), yRate(s.effUSvPerHr)]));
+  const altPath = line(samples.map((s) => [x(s.tHours), yAlt(s.altFt)]));
+
+  const grid = [0, 0.5, 1].map((f) => {
+    const y = H - padB - f * (H - padT - padB);
+    return `<line class="grid-line" x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}"/>` +
+      `<text class="axis-label" x="2" y="${y + 3}">${(maxRate * f).toFixed(1)}</text>` +
+      `<text class="axis-label" x="${W - padR + 3}" y="${y + 3}">${Math.round(maxAlt * f / 1000)}k</text>`;
+  }).join('');
+
+  const hours = `<text class="axis-label" x="${padL}" y="${H - 6}">0h</text>` +
+    `<text class="axis-label" x="${W - padR - 18}" y="${H - 6}">${maxT.toFixed(1)}h</text>`;
+
+  return svgEl(
+    grid +
+    `<path d="${altPath}" fill="none" stroke="var(--low-conf)" stroke-width="1.5"/>` +
+    `<path d="${dosePath}" fill="none" stroke="var(--amber)" stroke-width="2"/>` +
+    hours,
+    `0 0 ${W} ${H}`
+  );
+}
+
+// Equirectangular graticule rather than a coastline: what matters here is
+// latitude, which is what drives the dose, and it keeps the page self-contained
+// with no tile provider and no API key.
+function trackMap(samples) {
+  const W = 340, H = 180;
+  const x = (lon) => ((lon + 180) / 360) * W;
+  const y = (lat) => ((90 - lat) / 180) * H;
+
+  let grid = '';
+  for (let lat = -60; lat <= 60; lat += 30) {
+    grid += `<line class="grid-line" x1="0" y1="${y(lat)}" x2="${W}" y2="${y(lat)}"/>` +
+      `<text class="axis-label" x="2" y="${y(lat) - 2}">${lat}°</text>`;
+  }
+  for (let lon = -120; lon <= 120; lon += 60) {
+    grid += `<line class="grid-line" x1="${x(lon)}" y1="0" x2="${x(lon)}" y2="${H}"/>`;
+  }
+  grid += `<line class="grid-line" x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="#2a2a2a"/>`;
+
+  const maxRate = Math.max(...samples.map((s) => s.effUSvPerHr)) || 1;
+  const dots = samples.map((s) => {
+    const f = s.effUSvPerHr / maxRate;
+    const colour = f > 0.75 ? 'var(--alert)' : f > 0.45 ? 'var(--warn)' : 'var(--ok)';
+    return `<circle cx="${x(s.lon).toFixed(1)}" cy="${y(s.lat).toFixed(1)}" r="1.6" fill="${colour}"${s.interpolated ? ' opacity="0.45"' : ''}/>`;
+  }).join('');
+
+  return svgEl(grid + dots, `0 0 ${W} ${H}`);
+}
+
+function provRow(k, v) {
+  return `<div class="prov-row"><span class="prov-key">${esc(k)}</span><span class="prov-val">${esc(v)}</span></div>`;
+}
+
+async function openFlight(id) {
+  showScreen('detail');
+  const head = $('detail-head');
+  head.className = 'loading';
+  head.textContent = 'loading…';
+
+  let f;
+  try { f = await getJson(`/api/badge/flights/${encodeURIComponent(id)}`); }
+  catch (err) { head.textContent = 'Could not load that flight.'; return; }
+
+  head.className = '';
+  head.innerHTML = flightRow(f);
+
+  const samples = f.samples || [];
+  const hasSeries = samples.length > 1 && samples[0].effUSvPerHr != null;
+
+  $('detail-chart-card').hidden = !hasSeries;
+  $('detail-map-card').hidden = !hasSeries;
+  if (hasSeries) {
+    $('detail-chart').innerHTML = doseRateChart(samples);
+    $('detail-map').innerHTML = trackMap(samples);
+  }
+
+  // §9.3: this panel is not optional. It is what separates BADGE from a toy.
+  $('detail-prov-card').hidden = false;
+  const sp = f.solarParams || {};
+  $('detail-prov').innerHTML = [
+    provRow('model', f.dose.gcrModel),
+    provRow('dose quantity', f.dose.gcrQuantity || 'ICRP-116 effective dose'),
+    provRow('GCR', mSv(f.dose.gcrMSv)),
+    provRow('GCR H*(10)', mSv(f.dose.gcrH10MSv)),
+    // Separate rows, never summed (guardrail §13.4).
+    provRow('SPE', f.dose.speMSv == null ? 'not determined' : mSv(f.dose.speMSv)),
+    provRow('SPE method', f.dose.speMethod || '—'),
+    provRow('SPE confidence', f.dose.speConfidence || '—'),
+    provRow('telemetry source', f.telemetry.source),
+    provRow('coveredFraction', `${(f.telemetry.coveredFraction * 100).toFixed(1)}%`),
+    provRow('altitude source', f.telemetry.altSource || '—'),
+    provRow('confidence', f.dose.gcrConfidence),
+    provRow('uncertainty', f.dose.uncertaintyPct == null ? f.dose.uncertaintyBasis : `± ${pct(f.dose.uncertaintyPct)}`),
+    provRow('solar W-index', sp.wIndex == null ? '—' : sp.wIndex.toFixed(1)),
+    provRow('force field', sp.forceFieldMV == null ? '—' : `${Math.round(sp.forceFieldMV)} MV`),
+    provRow('solar source', sp.source || '—'),
+    provRow('entry hash', f.entryHash),
+    provRow('previous hash', f.prevHash || '—'),
+  ].join('');
+}
+
+/* --------------------------------------------------------------- project */
+
+let projectTimer = null;
+
+function projectInputs() {
+  return {
+    origin: $('proj-from').value.trim().toUpperCase(),
+    destination: $('proj-to').value.trim().toUpperCase(),
+    date: $('proj-date').value,
+    cruiseAltitudeFt: Number($('proj-alt').value) * 100,
+  };
+}
+
+async function runProjection() {
+  const body = projectInputs();
+  const card = $('proj-result-card');
+  const out = $('proj-result');
+  const badge = $('proj-badge');
+
+  if (!body.origin || !body.destination || !body.date) return;
+
+  badge.textContent = 'computing';
+  badge.className = 'badge badge-muted';
+
+  try {
+    const res = await fetch('/api/badge/project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = await res.json();
+    card.hidden = false;
+
+    if (!res.ok) {
+      badge.textContent = 'error';
+      badge.className = 'badge badge-alert';
+      out.innerHTML = `<p class="pending">${esc(j.error || 'Projection failed.')}</p>`;
+      return;
+    }
+
+    const p = j.projection;
+    badge.textContent = 'NOT RECORDED';
+    badge.className = 'badge badge-muted';
+
+    const cp = j.currentPosition;
+    out.innerHTML =
+      `<div class="proj-dose">${mSv(p.dose.gcrMSv)}</div>` +
+      `<div class="proj-sub">` +
+      `${esc(p.route)} · ${esc(p.dateUtc)} · FL${Math.round(p.cruiseAltitudeFt / 100)} · ${p.durationHours.toFixed(2)} h<br>` +
+      `peak ${p.peakDoseRateUSvPerHr.toFixed(2)} µSv/h · max lat ${p.maxLatitude.toFixed(1)}°<br>` +
+      `SPE: ${p.dose.speMSv == null ? 'not determined' : mSv(p.dose.speMSv)} — separate from GCR, never summed<br>` +
+      `solar: ${esc(p.solarParams.source)} (${esc(p.solarParams.confidence)}${p.solarParams.uncertaintyPct ? `, ±${p.solarParams.uncertaintyPct}% dose` : ''})<br>` +
+      (cp ? `against your position: ${pct(cp.pctOfAnnualLimit)} of the ${cp.annualLimitMSv} mSv limit so far` : 'no recorded flights to compare against') +
+      `</div>`;
+  } catch (err) {
+    card.hidden = false;
+    badge.textContent = 'offline';
+    badge.className = 'badge badge-stale';
+    out.innerHTML = '<p class="pending">Projection needs the backend.</p>';
+  }
+}
+
+function scheduleProjection() {
+  clearTimeout(projectTimer);
+  projectTimer = setTimeout(runProjection, 350);
+}
+
+/* ---------------------------------------------------------- brief screen */
+
+async function askBriefing(question) {
+  const hist = $('briefing-history');
+  const src = $('briefing-source');
+  src.textContent = 'thinking';
+  src.className = 'badge badge-muted';
+
+  try {
+    const asOf = new URLSearchParams(location.search).get('asOf');
+    const res = await fetch('/api/badge/brief' + (asOf ? `?asOf=${encodeURIComponent(asOf)}` : ''), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question || undefined }),
+    });
+    const b = await res.json();
+    src.textContent = b.source === 'llm' ? 'LLM · VERIFIED' : 'DETERMINISTIC';
+    src.className = `badge ${b.source === 'llm' ? 'badge-ok' : 'badge-muted'}`;
+
+    const entry = document.createElement('article');
+    entry.className = 'brief-entry';
+    entry.innerHTML =
+      (question ? `<p class="brief-q">${esc(question)}</p>` : '') +
+      `<p class="brief-a">${esc(b.text)}</p>` +
+      `<p class="brief-provenance">${esc([b.note, b.guard ? `numeral guard: ${b.guard.checked} checked, ${b.guard.unsupported.length} unsupported` : ''].filter(Boolean).join(' · '))}</p>`;
+    hist.prepend(entry);
+  } catch (err) {
+    src.textContent = 'offline';
+    src.className = 'badge badge-stale';
+  }
+}
+
 /* ------------------------------------------------------------------- wiring */
 
-document.querySelectorAll('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
-    tab.classList.add('active');
-    const target = tab.dataset.screen;
-    $('screen-now').hidden = target !== 'now';
-    $('screen-ledger').hidden = target !== 'ledger';
+const SCREENS = ['now', 'ledger', 'detail', 'project', 'briefing'];
+
+function showScreen(name) {
+  for (const s of SCREENS) $(`screen-${s}`).hidden = s !== name;
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.screen === name);
   });
+}
+
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.addEventListener('click', () => showScreen(tab.dataset.screen));
+});
+
+$('detail-back').addEventListener('click', () => showScreen('ledger'));
+
+// Ledger rows open the detail view.
+$('ledger-list').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-flight-id]');
+  if (row) openFlight(row.dataset.flightId);
+});
+$('last-flight').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-flight-id]');
+  if (row) openFlight(row.dataset.flightId);
+});
+
+$('proj-alt').addEventListener('input', () => {
+  $('proj-alt-read').textContent = `FL${$('proj-alt').value}`;
+  scheduleProjection();
+});
+['proj-from', 'proj-to', 'proj-date'].forEach((id) =>
+  $(id).addEventListener('change', scheduleProjection));
+
+$('briefing-go').addEventListener('click', () => {
+  askBriefing($('briefing-q').value.trim());
+  $('briefing-q').value = '';
+});
+$('briefing-q').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { askBriefing($('briefing-q').value.trim()); $('briefing-q').value = ''; }
 });
 
 $('refresh').addEventListener('click', () => { refresh(); loadBrief(); });
