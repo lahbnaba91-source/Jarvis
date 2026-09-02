@@ -9,6 +9,7 @@ const parma = require('./parma');
 const { integrate } = require('./integrate');
 const spe = require('./spe');
 const spaceweather = require('../spaceweather');
+const solarmod = require('./solarmod');
 
 // §6.7 source confidence. Synthesized profiles are the weakest input by design.
 const CONFIDENCE_BY_SOURCE = {
@@ -22,9 +23,10 @@ const CONFIDENCE_BY_SOURCE = {
   interpolated: 'low',
 };
 
-function computeFlightDose(spec) {
+async function computeFlightDose(spec) {
   const profile = profileEngine.synthesize(spec);
 
+  const solar = await solarmod.resolve(spec.date);
   const rates = parma.doseRates(
     profile.points.map((p) => ({
       year: p.year,
@@ -34,7 +36,7 @@ function computeFlightDose(spec) {
       lon: p.lon,
       altFt: p.altFt,
     })),
-    { g: spec.g }
+    { g: spec.g, wIndex: solar.lookupByDate ? undefined : solar.wIndex }
   );
 
   const totals = integrate(profile.points, rates);
@@ -103,7 +105,11 @@ function computeFlightDose(spec) {
     solarParams: {
       wIndex: rates[0].wIndex,
       forceFieldMV: rates[0].forceFieldMV,
-      source: 'PARMA bundled daily force-field table (Usoskin-derived)',
+      source: solar.source,
+      resolution: solar.resolution,
+      confidence: solar.confidence,
+      uncertaintyPct: solar.doseUncertaintyPct,
+      note: solar.note,
     },
 
     geometry: {

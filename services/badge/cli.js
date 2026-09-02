@@ -94,7 +94,9 @@ function printResult(result) {
   console.log(`  peak rate            ${result.peakDoseRateUSvPerHr.toFixed(2)} µSv/h`);
   console.log(`  mean rate            ${result.meanDoseRateUSvPerHr.toFixed(2)} µSv/h`);
   console.log(`  model                ${d.gcrModel} — ${d.gcrQuantity}`);
-  console.log(`  solar                W-index ${result.solarParams.wIndex.toFixed(1)}, force field ${result.solarParams.forceFieldMV.toFixed(0)} MV`);
+  const sp = result.solarParams;
+  console.log(`  solar                W-index ${sp.wIndex.toFixed(1)}, force field ${sp.forceFieldMV.toFixed(0)} MV`);
+  console.log(`                       ${sp.source} (${sp.resolution}, ${sp.confidence} confidence${sp.uncertaintyPct ? `, ±${sp.uncertaintyPct}% dose` : ''})`);
   console.log(`  telemetry            ${result.telemetry.source} (confidence: ${d.gcrConfidence}), covered ${(result.telemetry.coveredFraction * 100).toFixed(0)}%`);
   console.log(`  shielding            ${result.geometry.note}`);
   console.log(`  uncertainty          ${d.uncertaintyBasis}`);
@@ -136,28 +138,30 @@ function main(argv) {
   const dbPath = flag('db') || store.DEFAULT_DB;
 
   if (command === 'dose') {
-    const result = computeFlightDose(buildSpec(args, flag));
-    if (flags.includes('--json')) return console.log(JSON.stringify(result, null, 2));
-    printResult(result);
-    console.log(`  ledger               not recorded (use "log" to record)`);
-    return disclaimer();
+    return computeFlightDose(buildSpec(args, flag)).then((result) => {
+      if (flags.includes('--json')) return console.log(JSON.stringify(result, null, 2));
+      printResult(result);
+      console.log(`  ledger               not recorded (use "log" to record)`);
+      disclaimer();
+    });
   }
 
   if (command === 'log') {
     if (args.length < 4) throw new Error('log needs: <origin> <dest> <YYYY-MM-DD> <FL390>');
     const spec = buildSpec(args, flag);
-    const result = computeFlightDose(spec);
-    const db = store.open(dbPath);
-    const row = store.append(db, result, { spec, supersedes: flag('supersedes') });
-    const integrity = verify(db);
+    return computeFlightDose(spec).then((result) => {
+      const db = store.open(dbPath);
+      const row = store.append(db, result, { spec, supersedes: flag('supersedes') });
+      const integrity = verify(db);
 
-    if (flags.includes('--json')) return console.log(JSON.stringify({ entry: row, integrity }, null, 2));
-    printResult(result);
-    console.log('');
-    console.log(`  recorded             ${row.id}  (seq ${row.seq}${row.supersedes ? `, supersedes ${row.supersedes}` : ''})`);
-    console.log(`  ledger hash          ${row.entry_hash}`);
-    console.log(`  chain                ${integrity.intact ? 'intact' : 'BROKEN at ' + integrity.brokenAt}, ${integrity.entries} entries`);
-    return disclaimer();
+      if (flags.includes('--json')) return console.log(JSON.stringify({ entry: row, integrity }, null, 2));
+      printResult(result);
+      console.log('');
+      console.log(`  recorded             ${row.id}  (seq ${row.seq}${row.supersedes ? `, supersedes ${row.supersedes}` : ''})`);
+      console.log(`  ledger hash          ${row.entry_hash}`);
+      console.log(`  chain                ${integrity.intact ? 'intact' : 'BROKEN at ' + integrity.brokenAt}, ${integrity.entries} entries`);
+      disclaimer();
+    });
   }
 
   if (command === 'ledger') {
@@ -400,7 +404,7 @@ function main(argv) {
         }
       }
 
-      const result = computeTrackDose(pts, {
+      const result = await computeTrackDose(pts, {
         callsign: tr.callsign, icao24, date,
         g: flag('g') ? Number(flag('g')) : undefined,
       });
