@@ -84,6 +84,75 @@
     <div id="ledger-list" class="loading">loading…</div>
 
   </section>
+
+  <!-- ========================= FLIGHT DETAIL ======================== -->
+  <section id="screen-detail" class="screen" hidden>
+    <div class="card">
+      <div class="card-head">
+        <h2>FLIGHT DETAIL</h2>
+        <button id="detail-back" class="refresh" type="button">BACK</button>
+      </div>
+      <div id="detail-head" class="loading">select a flight from the ledger</div>
+    </div>
+
+    <div class="card" id="detail-chart-card" hidden>
+      <div class="card-head"><h2>DOSE RATE &amp; ALTITUDE</h2></div>
+      <div id="detail-chart"></div>
+      <p class="chart-legend">
+        <span class="key key-dose"></span> dose rate µSv/h
+        <span class="key key-alt"></span> altitude
+      </p>
+    </div>
+
+    <div class="card" id="detail-map-card" hidden>
+      <div class="card-head"><h2>TRACK</h2></div>
+      <div id="detail-map"></div>
+      <p class="chart-legend">Track coloured by dose rate. Latitude drives most of the variation.</p>
+    </div>
+
+    <div class="card" id="detail-prov-card" hidden>
+      <div class="card-head"><h2>PROVENANCE</h2></div>
+      <div id="detail-prov"></div>
+    </div>
+  </section>
+
+  <!-- ============================ PROJECT =========================== -->
+  <section id="screen-project" class="screen" hidden>
+    <div class="card">
+      <div class="card-head"><h2>PROJECT A TRIP</h2></div>
+      <div class="filters">
+        <input id="proj-from" type="text" placeholder="From (LAX)" autocomplete="off" value="LAX">
+        <input id="proj-to" type="text" placeholder="To (ICN)" autocomplete="off" value="ICN">
+      </div>
+      <div class="filters">
+        <input id="proj-date" type="date" value="2023-03-15">
+      </div>
+
+      <label class="slider-label" for="proj-alt">
+        CRUISE ALTITUDE <span id="proj-alt-read">FL390</span>
+      </label>
+      <input id="proj-alt" class="slider" type="range" min="240" max="450" step="10" value="390">
+
+      <p class="pending" id="proj-hint">Drag the altitude and watch the dose move. Every figure is computed on the backend.</p>
+    </div>
+
+    <div class="card" id="proj-result-card" hidden>
+      <div class="card-head"><h2>PROJECTED</h2><span id="proj-badge" class="badge badge-muted">—</span></div>
+      <div id="proj-result"></div>
+    </div>
+  </section>
+
+  <!-- ============================= BRIEF ============================ -->
+  <section id="screen-briefing" class="screen" hidden>
+    <div class="card brief-card">
+      <div class="card-head"><h2>ASK JARVIS</h2><span id="briefing-source" class="badge badge-muted">—</span></div>
+      <div class="brief-ask">
+        <input id="briefing-q" type="text" placeholder="Ask about your exposure…" autocomplete="off">
+        <button id="briefing-go" class="btn" type="button">ASK</button>
+      </div>
+    </div>
+    <div id="briefing-history"></div>
+  </section>
 </main>
 
 <footer class="disclaimer">
@@ -94,6 +163,8 @@
 <nav class="tabbar">
   <button class="tab active" data-screen="now" type="button">NOW</button>
   <button class="tab" data-screen="ledger" type="button">LEDGER</button>
+  <button class="tab" data-screen="project" type="button">PROJECT</button>
+  <button class="tab" data-screen="briefing" type="button">BRIEF</button>
 </nav>
 
 <script src="/app.js"></script>
