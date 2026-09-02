@@ -38,6 +38,7 @@ const FLIGHTS = [
   { origin: 'OMDB', destination: 'KLAX', date: { year: 2023, month: 3, day: 21 }, cruiseAltitudeFt: 43000 },
 ];
 
+(async () => {
 console.log('\nBADGE ledger tests (P2)\n');
 
 // --- append and chain --------------------------------------------------------
@@ -46,7 +47,7 @@ const db = store.open(dbPath);
 
 const written = [];
 for (const spec of FLIGHTS) {
-  written.push(store.append(db, computeFlightDose(spec), { spec }));
+  written.push(store.append(db, await computeFlightDose(spec), { spec }));
 }
 
 check('three flights appended', store.all(db).length === 3);
@@ -88,7 +89,7 @@ check('ledger still holds three entries after refused mutations', store.all(db).
 
 // --- corrections are new rows, not edits ------------------------------------
 const correctedSpec = { ...FLIGHTS[0], cruiseAltitudeFt: 37000 };
-const correction = store.append(db, computeFlightDose(correctedSpec), {
+const correction = store.append(db, await computeFlightDose(correctedSpec), {
   spec: correctedSpec,
   supersedes: written[0].id,
 });
@@ -149,4 +150,5 @@ check('removed entry detected as sequence gap', !v3.intact &&
 gappedDb.close();
 
 console.log(`\n  ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+  process.exit(failed ? 1 : 0);
+})();

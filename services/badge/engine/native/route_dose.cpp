@@ -5,7 +5,12 @@
 //   T. Sato, PLOS ONE 10(12): e0144679 (2015)
 //   T. Sato, PLOS ONE 11(8): e0160390 (2016)
 //
-// stdin  (whitespace separated, one point per line): year month day lat lon altFt g
+// stdin (whitespace separated, one point per line):
+//   year month day lat lon altFt g wIndexOverride
+//
+// wIndexOverride = -9999 means "look the solar parameter up from PARMA's bundled
+// daily table by date". Any other value is used directly, which is how BADGE
+// supplies a solar parameter for dates past the bundled table's 2023-05-03 end.
 // stdout (one per point):
 //   PT <wIndex> <forceFieldMV> <cutoffRigidityGV> <depthGcm2> <effUSvPerHr> <h10USvPerHr>
 //
@@ -75,13 +80,17 @@ int main()
     const double unitconv = 1.0e-6 * 3600.0; // matches PARMA main.cpp: -> uSv/h
 
     int iyear, imonth, iday;
-    double glat, glong, altft, g;
+    double glat, glong, altft, g, wOverride;
+    const double W_LOOKUP_BY_DATE = -9999.0;
 
     cout << scientific << setprecision(6);
 
-    while (cin >> iyear >> imonth >> iday >> glat >> glong >> altft >> g)
+    while (cin >> iyear >> imonth >> iday >> glat >> glong >> altft >> g >> wOverride)
     {
-        double s = getHPcpp(iyear, imonth, iday); // force field potential (MV)
+        // W-index (solar activity). Either from the bundled table or supplied.
+        double s = (wOverride == W_LOOKUP_BY_DATE)
+                       ? getHPcpp(iyear, imonth, iday)
+                       : wOverride;
         double r = getrcpp(glat, glong);          // vertical cutoff rigidity (GV)
         double alti = altft * 0.3048 * 0.001;     // ft -> km
         double d = getdcpp(alti, glat);           // atmospheric depth (g/cm2)

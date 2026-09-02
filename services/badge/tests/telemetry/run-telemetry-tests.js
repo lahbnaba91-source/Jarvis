@@ -14,6 +14,7 @@ function check(name, cond, detail = '') {
   else { failed++; console.log(`  FAIL  ${name}${detail ? ' — ' + detail : ''}`); }
 }
 
+(async () => {
 console.log('\nBADGE telemetry tests (P7)\n');
 
 // --- state vector decode -----------------------------------------------------
@@ -90,7 +91,7 @@ const cleanTrack = Array.from({ length: 90 }, (_, i) => ({
   t: t0 + i * 60, lat: 55 + i * 0.12, lon: -30 - i * 0.25, altFt: 39000,
   altSource: 'baro', baroGeomDivergenceFt: 520,
 }));
-const doseClean = computeTrackDose(cleanTrack, { callsign: 'TEST1' });
+const doseClean = await computeTrackDose(cleanTrack, { callsign: 'TEST1' });
 
 check('a recorded track produces a dose', doseClean.dose.gcrMSv > 0);
 check('full coverage keeps ADS-B high confidence',
@@ -107,7 +108,7 @@ const gappyTrack = [
   ...cleanTrack.slice(0, 40),
   ...cleanTrack.slice(40).map((s) => ({ ...s, t: s.t + 3000 })),
 ];
-const doseGappy = computeTrackDose(gappyTrack, { callsign: 'TEST2' });
+const doseGappy = await computeTrackDose(gappyTrack, { callsign: 'TEST2' });
 check('partial coverage downgrades confidence',
   doseGappy.dose.gcrConfidence !== 'high', doseGappy.dose.gcrConfidence);
 check('partial coverage relabels the source as merged',
@@ -118,35 +119,61 @@ check('coveredFraction is reported below 1', doseGappy.telemetry.coveredFraction
 
 // 1900 ft sits inside the measured real-world distribution (median 1500 ft,
 // max 2775 ft over 255 live aircraft), so it must NOT be flagged as anomalous.
-const typicalWide = computeTrackDose(
+const typicalWide = await computeTrackDose(
   cleanTrack.map((s) => ({ ...s, baroGeomDivergenceFt: 1900 })), { callsign: 'TEST3' });
 check('divergence typical of real traffic is not flagged as anomalous',
   typicalWide.telemetry.qualityFlag === 'nominal-isa-departure', typicalWide.telemetry.qualityFlag);
 
-const extreme = computeTrackDose(
+const extreme = await computeTrackDose(
   cleanTrack.map((s) => ({ ...s, baroGeomDivergenceFt: 4200 })), { callsign: 'TEST4' });
 check('divergence beyond the observed range is flagged',
   extreme.telemetry.qualityFlag === 'divergence-beyond-observed-range');
 
-const inverted = computeTrackDose(
+const inverted = await computeTrackDose(
   cleanTrack.map((s) => ({ ...s, baroGeomDivergenceFt: -400 })), { callsign: 'TEST5' });
 check('geometric below barometric is flagged as unusual (0 of 255 live samples)',
   inverted.telemetry.qualityFlag === 'geometric-below-barometric-unusual');
 
 let tooShort = false;
-try { computeTrackDose([{ t: 0, lat: 0, lon: 0, altFt: 39000 }]); } catch { tooShort = true; }
+try { await computeTrackDose([{ t: 0, lat: 0, lon: 0, altFt: 39000 }]); } catch { tooShort = true; }
 check('a one-point track is refused rather than guessed', tooShort);
 
-// The failure that actually blocks this phase in practice.
-let solarRefused = false;
+// This used to be the blocker: PARMA's bundled table ends 2023-05-03, so a
+// present-day flight could not be dosed at all. engine/solarmod now sources the
+// parameter from Oulu / NMDB, so it must compute AND declare where it came from.
+const now = Math.floor(Date.now() / 1000);
+const todayTrack = [
+  { t: now - 3600, lat: 55, lon: -30, altFt: 39000, altSource: 'baro' },
+  { t: now, lat: 56, lon: -31, altFt: 39000, altSource: 'baro' },
+];
+let today = null;
+try { today = await computeTrackDose(todayTrack); } catch (err) { today = { error: err.message }; }
+
+if (today && today.error) {
+  // Offline is a legitimate outcome; it must fail loudly rather than guess.
+  check('a present-day track without a reachable solar source is refused, not guessed',
+    /solar modulation/i.test(today.error), today.error);
+} else {
+  check('a present-day track now computes a dose', today.dose.gcrMSv > 0);
+  check('the present-day solar parameter is not from the stale bundled table',
+    today.solarParams.source !== 'parma-daily', today.solarParams.source);
+  check('the present-day solar parameter declares its provenance',
+    typeof today.solarParams.note === 'string' && today.solarParams.note.length > 20);
+  check('a nowcast parameter carries a dose uncertainty',
+    today.solarParams.source !== 'nmdb-nowcast' || today.solarParams.uncertaintyPct > 0);
+}
+
+// A future date cannot be observed, and must not be invented.
+let futureRefused = false;
 try {
-  const now = Math.floor(Date.now() / 1000);
-  computeTrackDose([
-    { t: now, lat: 55, lon: -30, altFt: 39000, altSource: 'baro' },
-    { t: now + 600, lat: 56, lon: -31, altFt: 39000, altSource: 'baro' },
+  const future = now + 60 * 86400;
+  await computeTrackDose([
+    { t: future, lat: 55, lon: -30, altFt: 39000, altSource: 'baro' },
+    { t: future + 600, lat: 56, lon: -31, altFt: 39000, altSource: 'baro' },
   ]);
-} catch (err) { solarRefused = /No solar modulation data/.test(err.message); }
-check("a present-day track is refused, not guessed (solar data ends 2023-05-03)", solarRefused);
+} catch (err) { futureRefused = /future|forecast/i.test(err.message); }
+check('a future date is refused rather than forecast', futureRefused);
 
 console.log(`\n  ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+  process.exit(failed ? 1 : 0);
+})();

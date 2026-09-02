@@ -66,15 +66,20 @@ function ensureBinary() {
   }
 }
 
+const LOOKUP_BY_DATE = -9999;
+
 // points: [{ year, month, day, lat, lon, altFt, g? }]
+// options.wIndex: explicit solar parameter (from engine/solarmod). Omitted means
+// PARMA looks the date up in its own bundled table, which ends 2023-05-03.
 // returns: [{ wIndex, forceFieldMV, cutoffRigidityGV, depthGcm2, effUSvPerHr, h10USvPerHr }]
 function doseRates(points, options = {}) {
   ensureBinary();
   if (!points.length) return [];
 
   const g = options.g === undefined ? G_FREE_AIR : options.g;
+  const w = options.wIndex === undefined || options.wIndex === null ? LOOKUP_BY_DATE : options.wIndex;
   const stdin = points
-    .map((p) => `${p.year} ${p.month} ${p.day} ${p.lat.toFixed(6)} ${p.lon.toFixed(6)} ${Math.round(p.altFt)} ${p.g === undefined ? g : p.g}`)
+    .map((p) => `${p.year} ${p.month} ${p.day} ${p.lat.toFixed(6)} ${p.lon.toFixed(6)} ${Math.round(p.altFt)} ${p.g === undefined ? g : p.g} ${w}`)
     .join('\n');
 
   const stdout = execFileSync(BINARY, {
@@ -103,7 +108,9 @@ function doseRates(points, options = {}) {
     throw new Error(`PARMA returned ${records.length} records for ${points.length} points`);
   }
 
-  const blind = records.findIndex((r) => r.wIndex === 0);
+  // Only meaningful when PARMA did its own lookup; an explicit W was sourced
+  // elsewhere and has already declared its provenance.
+  const blind = w === LOOKUP_BY_DATE ? records.findIndex((r) => r.wIndex === 0) : -1;
   if (blind !== -1) {
     const cov = solarCoverage();
     const p = points[blind];
@@ -117,4 +124,4 @@ function doseRates(points, options = {}) {
   return records;
 }
 
-module.exports = { doseRates, solarCoverage, MODEL_VERSION, G_FREE_AIR, VENDOR_DIR };
+module.exports = { doseRates, solarCoverage, MODEL_VERSION, G_FREE_AIR, VENDOR_DIR, LOOKUP_BY_DATE };

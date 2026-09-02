@@ -11,6 +11,7 @@ const parma = require('./parma');
 const { integrate } = require('./integrate');
 const spe = require('./spe');
 const spaceweather = require('../spaceweather');
+const solarmod = require('./solarmod');
 const coverage = require('../telemetry/coverage');
 const { CONFIDENCE_BY_SOURCE } = require('./dose');
 
@@ -19,7 +20,7 @@ function utcParts(epochSeconds) {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
 }
 
-function computeTrackDose(rawTrack, options = {}) {
+async function computeTrackDose(rawTrack, options = {}) {
   if (!Array.isArray(rawTrack) || rawTrack.length < 2) {
     throw new Error('A track needs at least two positions to integrate');
   }
@@ -37,9 +38,10 @@ function computeTrackDose(rawTrack, options = {}) {
     phase: s.interpolated ? 'interpolated' : 'recorded',
   }));
 
+  const solar = await solarmod.resolve(date);
   const rates = parma.doseRates(
     points.map((p) => ({ year: date.year, month: date.month, day: date.day, lat: p.lat, lon: p.lon, altFt: p.altFt })),
-    { g: options.g }
+    { g: options.g, wIndex: solar.lookupByDate ? undefined : solar.wIndex }
   );
 
   const totals = integrate(points, rates);
@@ -153,7 +155,11 @@ function computeTrackDose(rawTrack, options = {}) {
     solarParams: {
       wIndex: rates[0].wIndex,
       forceFieldMV: rates[0].forceFieldMV,
-      source: 'PARMA bundled daily force-field table (Usoskin-derived)',
+      source: solar.source,
+      resolution: solar.resolution,
+      confidence: solar.confidence,
+      uncertaintyPct: solar.doseUncertaintyPct,
+      note: solar.note,
     },
 
     geometry: {

@@ -20,6 +20,7 @@ function check(name, cond, detail = '') {
 }
 const near = (a, b, tol) => Math.abs(a - b) <= tol;
 
+(async () => {
 console.log('\nBADGE policy + SPE tests (P4)\n');
 
 // --- proton physics ----------------------------------------------------------
@@ -95,7 +96,7 @@ check('SPE carries a caveat about the fluence-to-dose step',
   /fluence-to-dose/.test(stormWindow.caveat));
 
 // --- the guardrail: SPE never merges into GCR --------------------------------
-const flight = computeFlightDose({
+const flight = await computeFlightDose({
   origin: 'OMDB', destination: 'KLAX',
   date: { year: 2023, month: 2, day: 8 }, cruiseAltitudeFt: 43000,
 });
@@ -142,7 +143,8 @@ const specs = [
   { origin: 'OMDB', destination: 'KLAX', date: { year: 2023, month: 2, day: 10 }, cruiseAltitudeFt: 43000 },
   { origin: 'LAX', destination: 'ICN', date: { year: 2022, month: 6, day: 10 }, cruiseAltitudeFt: 39000 },
 ];
-const rows = specs.map((s) => store.append(db, computeFlightDose(s), { spec: s }));
+const rows = [];
+for (const s of specs) rows.push(store.append(db, await computeFlightDose(s), { spec: s }));
 
 const st = status(db, { now: '2023-03-01T00:00:00Z' });
 check('YTD counts only the current year', st.flightsLogged === 3 && st.ytdGcrMSv > 0);
@@ -162,7 +164,7 @@ check('status carries the not-medical-advice line', /not medical advice/.test(st
 
 // Superseded entries must drop out of the totals.
 const correctedSpec = { ...specs[0], cruiseAltitudeFt: 31000 };
-store.append(db, computeFlightDose(correctedSpec), { spec: correctedSpec, supersedes: rows[0].id });
+store.append(db, await computeFlightDose(correctedSpec), { spec: correctedSpec, supersedes: rows[0].id });
 const after = status(db, { now: '2023-03-01T00:00:00Z' });
 check('correction replaces rather than adds to the total',
   after.flightsLogged === 3 && after.ytdGcrMSv < st.ytdGcrMSv,
@@ -176,4 +178,5 @@ check('switching policy changes the reported source',
 db.close();
 
 console.log(`\n  ${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+  process.exit(failed ? 1 : 0);
+})();

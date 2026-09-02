@@ -9,3 +9,4 @@ data/signing-key.json
 
 # Cached SWPC data and the locally-accumulated proton archive.
 data/spaceweather/
+data/solar/
