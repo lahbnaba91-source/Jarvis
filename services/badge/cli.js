@@ -33,6 +33,7 @@ BADGE — modeled cosmic radiation dose ledger for aircrew (GCR only)
   node cli.js policies                                      available limit policies
   node cli.js brief ["your question"]                       plain-language brief
   node cli.js track <icao24|callsign> [--log]               dose a real ADS-B track
+  node cli.js live [--lat=..] [--lon=..]                    aircraft airborne now
 
 Options
   --json              full structured result (dose / log)
@@ -46,7 +47,7 @@ Omitting the subcommand is treated as "dose", so the P1 form still works:
   node cli.js LAX ICN 2023-01-14 FL390
 `;
 
-const SUBCOMMANDS = new Set(['dose', 'log', 'ledger', 'verify', 'export', 'spaceweather', 'status', 'policies', 'brief', 'track', 'help']);
+const SUBCOMMANDS = new Set(['dose', 'log', 'ledger', 'verify', 'export', 'spaceweather', 'status', 'policies', 'brief', 'track', 'live', 'help']);
 
 function parseAltitude(token) {
   const t = String(token).toUpperCase();
@@ -384,10 +385,31 @@ function main(argv) {
       if (pts.length < 2) throw new Error('Not enough airborne positions to integrate');
       console.log(`  window ${new Date(pts[0].t * 1000).toISOString()} -> ${new Date(pts[pts.length - 1].t * 1000).toISOString()}`);
 
+      // --as-date substitutes the solar conditions of a date PARMA can reach, so
+      // the real geometry and real barometric altitudes can be exercised end to
+      // end. It is a PIPELINE TEST, never a dose record: the flight did not
+      // happen under those solar conditions, and --log is refused with it.
+      const asDate = flag('as-date');
+      let date;
+      if (asDate) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(asDate);
+        if (!m) throw new Error('--as-date needs YYYY-MM-DD');
+        date = { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) };
+        if (flags.includes('--log')) {
+          throw new Error('--as-date cannot be logged: the solar conditions are substituted, so the figure is not a real dose record');
+        }
+      }
+
       const result = computeTrackDose(pts, {
-        callsign: tr.callsign, icao24,
+        callsign: tr.callsign, icao24, date,
         g: flag('g') ? Number(flag('g')) : undefined,
       });
+
+      if (asDate) {
+        console.log('');
+        console.log(`  *** PIPELINE TEST — solar conditions substituted from ${asDate} ***`);
+        console.log('  *** Real track, real altitudes, WRONG solar date. Not a dose record. ***');
+      }
 
       if (flags.includes('--json')) return console.log(JSON.stringify(result, null, 2));
       printResult(result);
@@ -402,6 +424,37 @@ function main(argv) {
         console.log(`  recorded             ${row.id} (seq ${row.seq})`);
       }
       disclaimer();
+    })();
+  }
+
+  if (command === 'live') {
+    return (async () => {
+      const lat = Number(flag('lat') || 45);
+      const lon = Number(flag('lon') || 6);
+      const box = { lamin: lat - 2, lamax: lat + 2, lomin: lon - 3, lomax: lon + 3 };
+      const r = await adsb.statesInBox(box);
+      const cruising = r.states
+        .filter((s2) => !s2.onGround && s2.baroAltitudeFt > 28000)
+        .sort((a, b) => b.baroAltitudeFt - a.baroAltitudeFt);
+
+      console.log('');
+      console.log(`  ${r.states.length} aircraft in view, ${cruising.length} at/above FL280`);
+      console.log('');
+      console.log(`  ${'CALLSIGN'.padEnd(10)}${'ICAO24'.padEnd(9)}${'BARO'.padStart(8)}${'GEOM'.padStart(9)}${'DIVERGE'.padStart(9)}  FLAG`);
+      console.log('  ' + '-'.repeat(56));
+      for (const a of cruising.slice(0, 12)) {
+        const div = a.baroGeomDivergenceFt;
+        const flagTxt = div == null ? '—' : div < 0 ? 'INVERTED' : div > 3500 ? 'EXTREME' : 'ok';
+        console.log(
+          `  ${(a.callsign || '—').padEnd(10)}${a.icao24.padEnd(9)}` +
+          `${(Math.round(a.baroAltitudeFt) + 'ft').padStart(8)}` +
+          `${(a.geoAltitudeFt == null ? '—' : Math.round(a.geoAltitudeFt) + 'ft').padStart(9)}` +
+          `${(div == null ? '—' : Math.round(div) + 'ft').padStart(9)}  ${flagTxt}`
+        );
+      }
+      console.log('');
+      console.log('  Dose any of these:  node cli.js track <CALLSIGN> --as-date=2023-03-15');
+      console.log('');
     })();
   }
 

@@ -96,7 +96,8 @@ check('a recorded track produces a dose', doseClean.dose.gcrMSv > 0);
 check('full coverage keeps ADS-B high confidence',
   doseClean.dose.gcrConfidence === 'high' && doseClean.telemetry.source === 'adsb-baro');
 check('altitude source is recorded as barometric', doseClean.telemetry.altSource === 'baro');
-check('normal baro/geom divergence flags nominal', doseClean.telemetry.qualityFlag === 'nominal');
+check('ordinary ISA departure is not flagged as a fault',
+  doseClean.telemetry.qualityFlag === 'nominal-isa-departure');
 check('the UTC window comes from the track itself',
   doseClean.window.departUtc === new Date(t0 * 1000).toISOString());
 check('GCR and SPE stay separate on the track path',
@@ -115,10 +116,22 @@ check('the uncertainty basis names the interpolated share',
   /interpolated/.test(doseGappy.dose.uncertaintyBasis), doseGappy.dose.uncertaintyBasis);
 check('coveredFraction is reported below 1', doseGappy.telemetry.coveredFraction < 1);
 
-const wideDivergence = computeTrackDose(
+// 1900 ft sits inside the measured real-world distribution (median 1500 ft,
+// max 2775 ft over 255 live aircraft), so it must NOT be flagged as anomalous.
+const typicalWide = computeTrackDose(
   cleanTrack.map((s) => ({ ...s, baroGeomDivergenceFt: 1900 })), { callsign: 'TEST3' });
-check('divergence beyond the published range is flagged',
-  wideDivergence.telemetry.qualityFlag === 'baro-geom-divergence-above-published-range');
+check('divergence typical of real traffic is not flagged as anomalous',
+  typicalWide.telemetry.qualityFlag === 'nominal-isa-departure', typicalWide.telemetry.qualityFlag);
+
+const extreme = computeTrackDose(
+  cleanTrack.map((s) => ({ ...s, baroGeomDivergenceFt: 4200 })), { callsign: 'TEST4' });
+check('divergence beyond the observed range is flagged',
+  extreme.telemetry.qualityFlag === 'divergence-beyond-observed-range');
+
+const inverted = computeTrackDose(
+  cleanTrack.map((s) => ({ ...s, baroGeomDivergenceFt: -400 })), { callsign: 'TEST5' });
+check('geometric below barometric is flagged as unusual (0 of 255 live samples)',
+  inverted.telemetry.qualityFlag === 'geometric-below-barometric-unusual');
 
 let tooShort = false;
 try { computeTrackDose([{ t: 0, lat: 0, lon: 0, altFt: 39000 }]); } catch { tooShort = true; }
