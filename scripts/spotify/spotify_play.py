@@ -128,6 +128,25 @@ def pause(device_id: str = DEFAULT_DEVICE_ID) -> dict:
     return {"error": f"{resp.status_code}: {detail}"}
 
 
+def resume(device_id: str = DEFAULT_DEVICE_ID) -> dict:
+    """Resume whatever was playing -- a play call with no body, unlike
+    play_uri which forces a specific track. Used to undo a `pause`."""
+    token = get_access_token()
+    resp = requests.put(
+        "https://api.spotify.com/v1/me/player/play",
+        params={"device_id": device_id} if device_id else {},
+        headers={"Authorization": f"Bearer {token}"}, timeout=10)
+    if resp.status_code in (200, 204):
+        return {"resumed": True, "device_id": device_id}
+    if resp.status_code == 404:
+        return {"error": "NO_ACTIVE_DEVICE -- open Spotify (phone/desktop/web) first"}
+    try:
+        detail = resp.json().get("error", {}).get("message", resp.text)
+    except Exception:
+        detail = resp.text
+    return {"error": f"{resp.status_code}: {detail}"}
+
+
 def status() -> dict:
     if not TOKEN_PATH.is_file():
         return {"authed": False}
@@ -152,8 +171,8 @@ def progress() -> dict:
 
 
 def main() -> None:
-    if len(sys.argv) < 2 or sys.argv[1] not in ("exchange", "play", "pause", "status", "progress"):
-        err("usage: spotify_play.py exchange <code> | play <uri> | pause | status | progress")
+    if len(sys.argv) < 2 or sys.argv[1] not in ("exchange", "play", "pause", "resume", "status", "progress"):
+        err("usage: spotify_play.py exchange <code> | play <uri> | pause | resume | status | progress")
     action = sys.argv[1]
     if action == "exchange":
         if len(sys.argv) != 3:
@@ -167,6 +186,8 @@ def main() -> None:
         result = play_uri(sys.argv[2])
     elif action == "pause":
         result = pause()
+    elif action == "resume":
+        result = resume()
     else:
         result = status()
     print(json.dumps(result))
