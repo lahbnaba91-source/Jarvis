@@ -58,8 +58,10 @@ Config lives in barehands.json next to this file:
               { "title": "Props", "path": "media",        "kind": "media" } ] }
 
 "notes" orbs may point at ANY folder of markdown (an Obsidian vault is
-just a folder of markdown). The "media" orb is always the repo's ./media
-folder — the airlock: the only place images/models ever stage from.
+just a folder of markdown). The "media" orb may point anywhere too, so
+your props can stay where they already live; a relative path resolves
+against the repo. Wherever it points is the airlock — the only place
+images/models ever stage from.
 
 Your AI drives the ring by writing tiny files into ./state/ :
   state/state      one word: idle | listening | thinking | speaking
@@ -143,8 +145,8 @@ DEFAULT_GESTURES = {
 _config_lock = threading.Lock()
 
 # THE MEDIA AIRLOCK: the only folder the board can ever stage files from
-# (see /cmd's own jail check and /props below).
-MEDIA_ROOT = (HERE / "media").resolve()
+# (see /cmd's own jail check and /props below). Resolved from the Props
+# orb's `path` after CONFIG loads — see _media_root() below.
 MEDIA_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".webm",
               ".glb", ".gltf", ".svg"}
 
@@ -417,7 +419,11 @@ def hubspace_call(action, *args):
 
 
 def load_config():
-    cfg = {"name": "Assistant", "port": 8794, "orbs": []}
+    cfg = {"name": "Assistant", "port": 8794, "orbs": [],
+           # seconds before a non-idle ring state is treated as stale and
+           # shown as idle — rescues a writer that died without saying
+           # goodbye (see the note in /orb). Raise it if your turns run long.
+           "state_timeout_s": 600}
     try:
         cfg.update(json.loads((HERE / "barehands.json").read_text()))
     except Exception:
@@ -436,6 +442,32 @@ def load_config():
 
 
 CONFIG = load_config()
+
+
+def _media_root():
+    """The Props orb's folder, resolved. Defaults to the repo's own ./media.
+
+    A notes orb could always point at any folder on disk while the media orb
+    was pinned to ./media — that asymmetry meant an existing prop library had
+    to be COPIED into the repo (two copies of your own files, the second one
+    sitting in a git working tree). The Props orb's `path` is honoured now,
+    the same way a notes orb's is. A relative path still resolves against the
+    repo, so the shipped default is unchanged and an existing config keeps
+    working.
+    """
+    for orb in CONFIG.get("orbs", []):
+        if orb.get("kind") == "media":
+            q = Path(str(orb.get("path") or "media")).expanduser()
+            return (q if q.is_absolute() else HERE / q).resolve()
+    return (HERE / "media").resolve()
+
+
+MEDIA_ROOT = _media_root()
+
+try:
+    STATE_TIMEOUT = float(CONFIG.get("state_timeout_s", 600))
+except (TypeError, ValueError):
+    STATE_TIMEOUT = 600.0
 
 
 def clamp(v, lo, hi, cast=float):
@@ -524,6 +556,22 @@ class Handler(SimpleHTTPRequestHandler):
 
     def __init__(self, *a, **k):
         super().__init__(*a, directory=str(HERE), **k)
+
+    def translate_path(self, path):
+        # Serve /media/* from the configured Props folder, not blindly from
+        # ./media. The airlock check and the /props tree both honour
+        # MEDIA_ROOT, but static serving would resolve against the repo
+        # (directory=HERE), so a Props orb pointing elsewhere would list a
+        # viewer's real props and 404 every one of them. Same containment
+        # rule as the airlock: resolve first, then prove it's inside.
+        clean = path.split("?", 1)[0].split("#", 1)[0]
+        if clean.startswith("/media/"):
+            rel = urllib.parse.unquote(clean[len("/media/"):]).lstrip("/")
+            target = (MEDIA_ROOT / rel).resolve()
+            if MEDIA_ROOT == target or MEDIA_ROOT in target.parents:
+                return str(target)
+            return str(MEDIA_ROOT)
+        return super().translate_path(path)
 
     def log_message(self, *a):
         pass
@@ -728,7 +776,7 @@ class Handler(SimpleHTTPRequestHandler):
                     rel = str(cmd.get("src", "")).lstrip("/")
                     if rel.startswith("media/"):
                         rel = rel[6:]
-                    media = (HERE / "media").resolve()
+                    media = MEDIA_ROOT
                     target = (media / rel).resolve()
                     if media not in target.parents or not target.is_file():
                         name = Path(rel).name.lower()
@@ -828,7 +876,7 @@ class Handler(SimpleHTTPRequestHandler):
                         # knows which jail to resolve them against
                         out["notes"].append(
                             {"title": p.stem,
-                             "file": f"{int(idx)}/{p.relative_to(root)}"})
+                             "file": f"{int(idx)}/{p.relative_to(root).as_posix()}"})
                 return out
             try:
                 tree = walk(root)
@@ -848,10 +896,19 @@ class Handler(SimpleHTTPRequestHandler):
                         continue
                     if p.is_dir():
                         sub = walkm(p)
-                        if sub["items"] or sub["dirs"]:
+                        # a folder carrying a README was made on purpose, so
+                        # it stays listed even while empty — the board is how
+                        # a folder gets discovered. Arbitrary empty folders
+                        # still stay hidden.
+                        documented = (p / "README.md").is_file()
+                        if sub["items"] or sub["dirs"] or documented:
                             out["dirs"].append(sub)
                     elif p.suffix.lower() in MEDIA_EXTS:
-                        out["items"].append(str(p.relative_to(MEDIA_ROOT)))
+                        # as_posix: these strings become URL fragments in the
+                        # browser, where a backslash is not a separator — and
+                        # THE FOLDER IS THE RENDER LAW, read client-side with
+                        # forward slashes (/\/fx\// etc. in stage.html).
+                        out["items"].append(p.relative_to(MEDIA_ROOT).as_posix())
                 return out
             try:
                 tree = walkm(MEDIA_ROOT)
@@ -895,9 +952,18 @@ class Handler(SimpleHTTPRequestHandler):
             s_dir = HERE / "state"
             out = {"state": "idle", "mood": "green", "wave": None}
             try:
-                s = (s_dir / "state").read_text().strip().lower()
+                f = s_dir / "state"
+                s = f.read_text().strip().lower()
                 if s in ("idle", "listening", "thinking", "speaking"):
-                    out["state"] = s
+                    # a STALE non-idle state decays to idle: the only thing
+                    # that ever writes "idle" is a session finishing, so a
+                    # session killed or crashed mid-turn never writes it and
+                    # the ring sat on "thinking" forever. Safety net for a
+                    # dead writer, not a liveness signal — a genuinely long
+                    # turn decays too; raise state_timeout_s if yours do.
+                    age = time.time() - f.stat().st_mtime
+                    if s == "idle" or age < STATE_TIMEOUT:
+                        out["state"] = s
             except Exception:
                 pass
             try:
