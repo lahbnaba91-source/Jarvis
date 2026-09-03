@@ -96,6 +96,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 <div id="cards"></div>
 <a class="card hands" id="hands-card" target="_blank" rel="noopener">
   <span class="n">The Hands</span>
+  <span class="key">H</span>
   <div class="tag">Move your notes and props with bare hands over your camera - a separate app (barehands), opens in its own tab. Needs a webcam and Chrome.</div>
 </a>
 <div id="foot">
@@ -150,38 +151,22 @@ let deflt="board";
   const h=location.hostname;
   const url=h.includes("-8790.")
     ? location.protocol+"//"+h.replace("-8790.","-8794.")+"/stage.html"
-    : "http://127.0.0.1:8794/stage.html";
+    : location.protocol+"//"+h+":8794/stage.html";
   document.getElementById("hands-card").href=url;
   document.querySelector("#hands-card .n").insertAdjacentHTML(
     "beforebegin", `<span class="swatch">${SWATCH.hands}</span>`);
+  addEventListener("keydown",e=>{
+    if(e.key.toLowerCase()==="h")location.href=url;
+  });
 })();
 AV.init({sound:false});
 AV.ready(a=>{
   document.getElementById("who").textContent=a.name.toUpperCase();
   const faces=(a.faces&&a.faces.length)?a.faces:FALLBACK;
   fetch("/config",{cache:"no-store"}).then(r=>r.json())
-    .then(c=>{deflt=c.face||"board";render(faces);addHandsCard()})
-    .catch(()=>{render(faces);addHandsCard()});
+    .then(c=>{deflt=c.face||"board";render(faces)})
+    .catch(()=>render(faces));
 });
-function handsURL(){
-  const h=location.hostname;
-  if(h.includes("-8790."))return `${location.protocol}//${h.replace("-8790.","-8794.")}/stage.html`;
-  return `${location.protocol}//${h}:8794/stage.html`;
-}
-function addHandsCard(){
-  const cards=document.getElementById("cards");
-  const a=document.createElement("a");
-  a.id="hands-card";
-  a.className="card";
-  a.href=handsURL();
-  a.innerHTML=`<span class="n">THE HANDS</span>`+
-    `<span class="key">H</span>`+
-    `<div class="tag">Touchless webcam hand-tracking — notes, images, and models on screen, moved by moving your hands. Pinch to grab, throw to fling, clap to clear. Phone only, not one of the faces above.</div>`;
-  cards.appendChild(a);
-  addEventListener("keydown",e=>{
-    if(e.key.toLowerCase()==="h")location.href=a.href;
-  });
-}
 function render(faces){
   const cards=document.getElementById("cards");
   cards.innerHTML="";
