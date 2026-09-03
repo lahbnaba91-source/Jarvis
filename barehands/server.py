@@ -132,8 +132,9 @@ DEFAULT_GESTURES = {
     "fingerGun": True,       # dun-dun pose -> SVU sting
     "peaceSign": True,       # double peace sign -> "Yeah!"
     "shush": True,           # finger on lips (face-gated) -> pause Spotify
-    "rps": True,             # rock/paper/scissors throw -> play vs Jarvis
     "pileDeck": True,        # 3+ open folders/tabs -> pile; pinch-sweep pages
+    # rock-paper-scissors is NOT here -- it's the dock's session-local
+    # GAME toggle (RPS_ON in stage.html), not a persisted config flag
     "rotateDragCancelPx": 800,  # px of drag since the hold started that
                              # cancels the 3D-rotate latch -- replaces the
                              # old position-based (corner/bar-only) gate:
@@ -492,7 +493,6 @@ GESTURE_FIELDS = {
     "fingerGun": lambda v: bool(v),
     "peaceSign": lambda v: bool(v),
     "shush": lambda v: bool(v),
-    "rps": lambda v: bool(v),
     "pileDeck": lambda v: bool(v),
     "rotateDragCancelPx": lambda v: clamp(v, 200, 3000, cast=int),
     "rotateLatchMs": lambda v: clamp(v, 300, 5000, cast=int),

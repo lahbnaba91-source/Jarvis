@@ -293,12 +293,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   #topDockPill.open #topDockRow button { opacity:1; transform:scale(1);
                                           filter:blur(0); transition-delay:0.2s; }
   #skelBtn, #darkBtn, #recBtn, #camBtn, #trackBtn, #settingsBtn,
-  #calBtn, #delegateBtn {
+  #calBtn, #delegateBtn, #gameBtn {
     background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
     border:1px solid rgba(140,240,225,0.35); border-radius:8px;
     padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
     letter-spacing:0.06em; cursor:pointer; flex:0 0 auto; }
-  #skelBtn.on, #darkBtn.on, #camBtn.on, #trackBtn.on, #delegateBtn.on {
+  #skelBtn.on, #darkBtn.on, #camBtn.on, #trackBtn.on, #delegateBtn.on,
+  #gameBtn.on {
     color:#8ff0e4; border-color:rgba(140,240,225,0.75);
     box-shadow:0 0 12px rgba(111,229,214,0.35); }
   #recBtn.rec { color:#ff8a8a; border-color:rgba(255,110,110,0.8);
@@ -499,14 +500,14 @@ setTimeout(function () {
 <canvas id="skeleton"></canvas>
 <div id="behind"></div>
 <div id="boot">BAREHANDS<br><span style="color:#a8d8cf;font-size:12px;letter-spacing:0.22em">by jaredrhod</span><br><span style="color:#a8d8cf;font-size:13px">loading hand tracker… allow the camera when asked</span></div>
-<div id="hint">tap the RING = orbs · tap an orb = its tree · TAP a card = open · pinch-drag = move · hold still ~1s = 3D rotate · two hands = scale · TAP an open item = close · CLAP (palms together, fingers up) = ring center-stage · CLAW: flash open, finger-gun (thumb+index out) to aim, hold 2.5s for the shake, curl index to thumb-only to fire = force pull · MIDDLE FINGER (alone, held ~2s) = Gestures bubble · SHUSH (finger on your lips) = pause Spotify · ROCK / PAPER / SCISSORS (hold the throw ~1s) = play Jarvis · 3+ open folders/tabs pile up — pinch + fast sweep R→L = next, L→R = previous · empty pinch dragged sideways = explode scrub · FLICK (pinch thumb+index like a click, then snap them apart fast) = shoot the grabbed item off screen · SPIN (hold an item with one hand, snap-pinch the OTHER hand empty-handed) = spins the held item for 4s then eases to a stop · R respawn / C camera / D debug / CAM = pair a phone's camera</div>
+<div id="hint">tap the RING = orbs · tap an orb = its tree · TAP a card = open · pinch-drag = move · hold still ~1s = 3D rotate · two hands = scale · TAP an open item = close · CLAP (palms together, fingers up) = ring center-stage · CLAW: flash open, finger-gun (thumb+index out) to aim, hold 2.5s for the shake, curl index to thumb-only to fire = force pull · MIDDLE FINGER (alone, held ~2s) = Gestures bubble · SHUSH (finger on your lips) = pause Spotify · GAME button in the dock = rock-paper-scissors vs Jarvis (then hold a throw ~1s) · 3+ open folders/tabs pile up — pinch + fast sweep R→L = next, L→R = previous · empty pinch dragged sideways = explode scrub · FLICK (pinch thumb+index like a click, then snap them apart fast) = shoot the grabbed item off screen · SPIN (hold an item with one hand, snap-pinch the OTHER hand empty-handed) = spins the held item for 4s then eases to a stop · R respawn / C camera / D debug / CAM = pair a phone's camera</div>
 <div id="debug"></div>
 <div id="topDock">
 <button id="topDockHandle" type="button" aria-label="toggle options">&#8942;</button>
 <div id="topDockPill">
 <div id="topDockInner">
 <div id="topDockRow">
-<button id="skelBtn" type="button">SKELETON</button><button id="darkBtn" type="button">DARK</button><button id="recBtn" type="button">RECORD</button><button id="camBtn" type="button">CAM</button><button id="trackBtn" type="button">TRACK</button><button id="settingsBtn" type="button">SETTINGS</button><button id="calBtn" type="button">CALIBRATE</button><button id="delegateBtn" type="button">GPU</button>
+<button id="skelBtn" type="button">SKELETON</button><button id="darkBtn" type="button">DARK</button><button id="recBtn" type="button">RECORD</button><button id="camBtn" type="button">CAM</button><button id="trackBtn" type="button">TRACK</button><button id="settingsBtn" type="button">SETTINGS</button><button id="calBtn" type="button">CALIBRATE</button><button id="delegateBtn" type="button">GPU</button><button id="gameBtn" type="button">GAME</button>
 </div>
 </div>
 </div>
@@ -540,8 +541,6 @@ setTimeout(function () {
       <input type="checkbox" id="gsPeaceSign"></div>
     <div class="row"><label for="gsShush">🤫 SHUSH (finger on lips → pause Spotify)</label>
       <input type="checkbox" id="gsShush"></div>
-    <div class="row"><label for="gsRps">✊✋✌️ ROCK PAPER SCISSORS vs Jarvis</label>
-      <input type="checkbox" id="gsRps"></div>
     <div class="row"><label for="gsPileDeck">🗂️ PILE DECK (3+ folders/tabs → pinch-sweep to page)</label>
       <input type="checkbox" id="gsPileDeck"></div>
     <div class="row"><label for="gsCornerMargin">rotate drag-cancel (px)</label>
@@ -645,6 +644,19 @@ skelBtn.addEventListener("click", () => {
   dbg.style.display = SKEL_ON ? "block" : "none";
   if (!SKEL_ON) skelCtx.clearRect(0, 0, skelCv.width, skelCv.height);
 });
+// GAME (2026-09-03, Luis's call): rock-paper-scissors used to fire from
+// an always-listening pose -- too easy to trip. Now it's an explicit
+// dock toggle. While GAME is lit, throwing fist / open palm / peace
+// plays a round; while it's off the throws do nothing. Session-local,
+// not persisted -- you turn it on to play and off when done.
+const gameBtn = document.getElementById("gameBtn");
+let RPS_ON = false;
+gameBtn.addEventListener("click", () => {
+  RPS_ON = !RPS_ON;
+  gameBtn.classList.toggle("on", RPS_ON);
+  toast(RPS_ON ? "🎮 rock-paper-scissors on — throw a hand"
+               : "🎮 game off", 1400);
+});
 const darkBtn = document.getElementById("darkBtn");
 let DARK_ON = false;
 darkBtn.addEventListener("click", () => {
@@ -698,7 +710,6 @@ const gsRockOn = document.getElementById("gsRockOn");
 const gsFingerGun = document.getElementById("gsFingerGun");
 const gsPeaceSign = document.getElementById("gsPeaceSign");
 const gsShush = document.getElementById("gsShush");
-const gsRps = document.getElementById("gsRps");
 const gsPileDeck = document.getElementById("gsPileDeck");
 const gsCornerMargin = document.getElementById("gsCornerMargin");
 const gsCornerMarginVal = document.getElementById("gsCornerMarginVal");
@@ -717,7 +728,6 @@ function syncGesturePanel() {
   gsFingerGun.checked = !!g.fingerGun;
   gsPeaceSign.checked = !!g.peaceSign;
   gsShush.checked = !!g.shush;
-  gsRps.checked = !!g.rps;
   gsPileDeck.checked = !!g.pileDeck;
   gsCornerMargin.value = g.rotateDragCancelPx;
   gsCornerMarginVal.textContent = g.rotateDragCancelPx + "px";
@@ -749,7 +759,6 @@ document.getElementById("settingsSave").addEventListener("click", async () => {
     fingerGun: gsFingerGun.checked,
     peaceSign: gsPeaceSign.checked,
     shush: gsShush.checked,
-    rps: gsRps.checked,
     pileDeck: gsPileDeck.checked,
     rotateDragCancelPx: Number(gsCornerMargin.value),
     rotateLatchMs: Number(gsRotateLatchMs.value),
@@ -2208,7 +2217,7 @@ function ringToggle(ring) {
 // never a crash, just the same defaults the server would have sent.
 const DEFAULT_GESTURES = {
   rockOn: true, fingerGun: true, peaceSign: true,
-  shush: true, rps: true, pileDeck: true,
+  shush: true, pileDeck: true,
   rotateDragCancelPx: 800, rotateLatchMs: 2000, fingerGunCurl: 0.92,
 };
 let CFG = { name: "Assistant", orbs: [], gestures: { ...DEFAULT_GESTURES } };
@@ -5312,10 +5321,15 @@ async function boot() {
         shushHoldSince = 0; shushFired = false;
       }
 
-      // ROCK PAPER SCISSORS: one hand throwing fist / open palm / peace,
-      // nothing grabbed, held ~700ms -- only when a round isn't already
+      // ROCK PAPER SCISSORS: only while the dock's GAME toggle (RPS_ON)
+      // is lit. One hand throwing fist / open palm / peace, nothing
+      // grabbed, held ~700ms -- and only when a round isn't already
       // running and the previous throw has been released (rpsArmed).
-      const rpsHand = CFG.gestures.rps && rpsPhase === "idle" &&
+      if (!RPS_ON && rpsHud.classList.contains("on")) {
+        rpsTimers.forEach(clearTimeout); rpsTimers = [];
+        rpsHud.classList.remove("on"); rpsPhase = "idle";
+      }
+      const rpsHand = RPS_ON && rpsPhase === "idle" &&
         seenArr.length === 1 && !items.some(k => k.grabbedBy.length) &&
         cursors[seenArr[0]] ? cursors[seenArr[0]] : null;
       const rpsPose = rpsHand
