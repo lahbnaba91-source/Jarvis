@@ -1,0 +1,1059 @@
+{
+  "ranAt": "2026-09-03T02:57:50.801Z",
+  "referenceSet": "quinonez-2019-cari7a-altitude-polynomials",
+  "rows": [
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 280,
+      "badgeRate": 2.8563698117346936,
+      "refRate": 3.1518111743999997,
+      "devPct": -9.373701225028123,
+      "maxLatitude": 81.32127888544939
+    },
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 300,
+      "badgeRate": 3.4755517399904576,
+      "refRate": 3.7041899999999996,
+      "devPct": -6.172422581172727,
+      "maxLatitude": 81.32152813469501
+    },
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 320,
+      "badgeRate": 4.14769907813464,
+      "refRate": 4.2988486656,
+      "devPct": -3.5160481148098977,
+      "maxLatitude": 81.32143926203324
+    },
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 340,
+      "badgeRate": 4.872032666341654,
+      "refRate": 4.930130179199999,
+      "devPct": -1.17841741995893,
+      "maxLatitude": 81.32144577441605
+    },
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 360,
+      "badgeRate": 5.644367126070533,
+      "refRate": 5.590737100799999,
+      "devPct": 0.9592657337233612,
+      "maxLatitude": 81.32152596387961
+    },
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 380,
+      "badgeRate": 6.436306989379719,
+      "refRate": 6.271629014399999,
+      "devPct": 2.6257607808371612,
+      "maxLatitude": 81.32127888544939
+    },
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 400,
+      "badgeRate": 7.24703086215308,
+      "refRate": 6.961919999999999,
+      "devPct": 4.095290697868991,
+      "maxLatitude": 81.32152813469501
+    },
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 420,
+      "badgeRate": 8.085783243070297,
+      "refRate": 7.648776105599998,
+      "devPct": 5.713425670158495,
+      "maxLatitude": 81.32143926203324
+    },
+    {
+      "route": "OTBD-KLAX",
+      "polar": true,
+      "fl": 440,
+      "badgeRate": 8.935209344762388,
+      "refRate": 8.317312819199998,
+      "devPct": 7.429040352263947,
+      "maxLatitude": 81.32144577441605
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 280,
+      "badgeRate": 2.846306943055457,
+      "refRate": 3.1298591743999995,
+      "devPct": -9.05958433094358,
+      "maxLatitude": 83.87007811904662
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 300,
+      "badgeRate": 3.4632053136765095,
+      "refRate": 3.6771899999999995,
+      "devPct": -5.819244758184647,
+      "maxLatitude": 83.87017540580042
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 320,
+      "badgeRate": 4.132879597262678,
+      "refRate": 4.2660806656,
+      "devPct": -3.1223288722926035,
+      "maxLatitude": 83.86984927159028
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 340,
+      "badgeRate": 4.854548624817004,
+      "refRate": 4.890826179199999,
+      "devPct": -0.7417469575442897,
+      "maxLatitude": 83.87018683258061
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 360,
+      "badgeRate": 5.624065636424275,
+      "refRate": 5.5440811008,
+      "devPct": 1.4427013993848972,
+      "maxLatitude": 83.87004383937791
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 380,
+      "badgeRate": 6.413136433202151,
+      "refRate": 6.2167570144,
+      "devPct": 3.1588723565562216,
+      "maxLatitude": 83.87007811904662
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 400,
+      "badgeRate": 7.220950593304619,
+      "refRate": 6.897919999999999,
+      "devPct": 4.6830144928416075,
+      "maxLatitude": 83.87017540580042
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 420,
+      "badgeRate": 8.056677546587846,
+      "refRate": 7.574688105599998,
+      "devPct": 6.363158908569592,
+      "maxLatitude": 83.86984927159028
+    },
+    {
+      "route": "OMAA-KLAX",
+      "polar": true,
+      "fl": 440,
+      "badgeRate": 8.902945110356795,
+      "refRate": 8.2321288192,
+      "devPct": 8.14875843041029,
+      "maxLatitude": 83.87018683258061
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 280,
+      "badgeRate": 2.8584490749786937,
+      "refRate": 3.1315802111999997,
+      "devPct": -8.721831082099094,
+      "maxLatitude": 84.5843655028743
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 300,
+      "badgeRate": 3.478291796351346,
+      "refRate": 3.67962,
+      "devPct": -5.471440084809129,
+      "maxLatitude": 84.58411358966383
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 320,
+      "badgeRate": 4.15125936872246,
+      "refRate": 4.2694361088,
+      "devPct": -2.767970689008751,
+      "maxLatitude": 84.58428731419829
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 340,
+      "badgeRate": 4.876541481606641,
+      "refRate": 4.8953697216,
+      "devPct": -0.3846132378987051,
+      "maxLatitude": 84.58430759324088
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 360,
+      "badgeRate": 5.649978283565047,
+      "refRate": 5.5501277184,
+      "devPct": 1.7990678815195318,
+      "maxLatitude": 84.58407303310743
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 380,
+      "badgeRate": 6.443126867171817,
+      "refRate": 6.2246805312,
+      "devPct": 3.5093581891777075,
+      "maxLatitude": 84.5843655028743
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 400,
+      "badgeRate": 7.255242317221315,
+      "refRate": 6.9081600000000005,
+      "devPct": 5.024236804320028,
+      "maxLatitude": 84.58411358966383
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 420,
+      "badgeRate": 8.095556425754214,
+      "refRate": 7.587757228799999,
+      "devPct": 6.692349025438222,
+      "maxLatitude": 84.58428731419829
+    },
+    {
+      "route": "OMDB-KLAX",
+      "polar": true,
+      "fl": 440,
+      "badgeRate": 8.946516949582733,
+      "refRate": 8.2486204416,
+      "devPct": 8.460766414503139,
+      "maxLatitude": 84.58430759324088
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 280,
+      "badgeRate": 2.7542401255283577,
+      "refRate": 3.09288064,
+      "devPct": -10.949032759041177,
+      "maxLatitude": 70.05245692358154
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 300,
+      "badgeRate": 3.347695911298766,
+      "refRate": 3.6353999999999993,
+      "devPct": -7.91395963858814,
+      "maxLatitude": 70.05250344680503
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 320,
+      "badgeRate": 3.99078971290589,
+      "refRate": 4.213021439999999,
+      "devPct": -5.274877668177944,
+      "maxLatitude": 70.05250798230745
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 340,
+      "badgeRate": 4.682661905401195,
+      "refRate": 4.81953184,
+      "devPct": -2.8399010348441744,
+      "maxLatitude": 70.05244785260099
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 360,
+      "badgeRate": 5.419249093441782,
+      "refRate": 5.44792704,
+      "devPct": -0.5264010759993153,
+      "maxLatitude": 70.0525234900763
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 380,
+      "badgeRate": 6.173363667024063,
+      "refRate": 6.090411839999998,
+      "devPct": 1.3620068593598558,
+      "maxLatitude": 70.05245692358154
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 400,
+      "badgeRate": 6.943584726221569,
+      "refRate": 6.7384,
+      "devPct": 3.0450066220700496,
+      "maxLatitude": 70.05250344680503
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 420,
+      "badgeRate": 7.738565784632548,
+      "refRate": 7.382514239999997,
+      "devPct": 4.822903594325483,
+      "maxLatitude": 70.05250798230745
+    },
+    {
+      "route": "OEJN-KLAX",
+      "polar": true,
+      "fl": 440,
+      "badgeRate": 8.542084251636552,
+      "refRate": 8.012586239999997,
+      "devPct": 6.608328394560346,
+      "maxLatitude": 70.05244785260099
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 280,
+      "badgeRate": 2.637550655478481,
+      "refRate": 3.0500159999999994,
+      "devPct": -13.523382976401388,
+      "maxLatitude": -61.7422909643644
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 300,
+      "badgeRate": 3.1968624823776626,
+      "refRate": 3.576999999999999,
+      "devPct": -10.627271949184697,
+      "maxLatitude": -61.742318604597514
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 320,
+      "badgeRate": 3.7995462974270913,
+      "refRate": 4.135679999999999,
+      "devPct": -8.12765258852009,
+      "maxLatitude": -61.742324501664825
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 340,
+      "badgeRate": 4.444404806739658,
+      "refRate": 4.719863999999999,
+      "devPct": -5.836168017984028,
+      "maxLatitude": -61.74227917024511
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 360,
+      "badgeRate": 5.127359689085746,
+      "refRate": 5.322591999999998,
+      "devPct": -3.667993167882349,
+      "maxLatitude": -61.74233371508383
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 380,
+      "badgeRate": 5.82257667863662,
+      "refRate": 5.936136,
+      "devPct": -1.9130175144804613,
+      "maxLatitude": -61.7422909643644
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 400,
+      "badgeRate": 6.527324464348045,
+      "refRate": 6.551999999999999,
+      "devPct": -0.37661073949868945,
+      "maxLatitude": -61.742318604597514
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 420,
+      "badgeRate": 7.249093533056121,
+      "refRate": 7.160919999999999,
+      "devPct": 1.2313157116141809,
+      "maxLatitude": -61.742324501664825
+    },
+    {
+      "route": "SCEL-YSSY",
+      "polar": true,
+      "fl": 440,
+      "badgeRate": 7.973181153564213,
+      "refRate": 7.752863999999999,
+      "devPct": 2.841751816673353,
+      "maxLatitude": -61.74227917024511
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 280,
+      "badgeRate": 2.5328939710593357,
+      "refRate": 2.8403020800000003,
+      "devPct": -10.823077978405191,
+      "maxLatitude": 87.92302617453299
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 300,
+      "badgeRate": 3.0775163917855504,
+      "refRate": 3.3278,
+      "devPct": -7.520993094971137,
+      "maxLatitude": 87.92345749571956
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 320,
+      "badgeRate": 3.6680725190546544,
+      "refRate": 3.8442956800000005,
+      "devPct": -4.584016829458502,
+      "maxLatitude": 87.92246568898699
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 340,
+      "badgeRate": 4.303885250606463,
+      "refRate": 4.384140479999999,
+      "devPct": -1.8305806978506391,
+      "maxLatitude": 87.92341973926817
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 360,
+      "badgeRate": 4.981429995545818,
+      "refRate": 4.94098688,
+      "devPct": 0.818523030480462,
+      "maxLatitude": 87.92313942448182
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 380,
+      "badgeRate": 5.675904443498051,
+      "refRate": 5.507788479999999,
+      "devPct": 3.0523315139736695,
+      "maxLatitude": 87.92302617453299
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 400,
+      "badgeRate": 6.385762925115102,
+      "refRate": 6.0768,
+      "devPct": 5.084303006765093,
+      "maxLatitude": 87.92345749571956
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 420,
+      "badgeRate": 7.119218978411362,
+      "refRate": 6.639577280000002,
+      "devPct": 7.223979452067764,
+      "maxLatitude": 87.92246568898699
+    },
+    {
+      "route": "WSSS-KEWR",
+      "polar": false,
+      "fl": 440,
+      "badgeRate": 7.861833733485204,
+      "refRate": 7.186977280000002,
+      "devPct": 9.389990077792513,
+      "maxLatitude": 87.92341973926817
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 280,
+      "badgeRate": 2.5329200602134763,
+      "refRate": 2.7147353599999997,
+      "devPct": -6.697348937412576,
+      "maxLatitude": 87.9234588501205
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 300,
+      "badgeRate": 3.077586784443879,
+      "refRate": 3.171099999999999,
+      "devPct": -2.948920423705347,
+      "maxLatitude": 87.92247400283284
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 320,
+      "badgeRate": 3.6681221615121546,
+      "refRate": 3.65216256,
+      "devPct": 0.43699044743930593,
+      "maxLatitude": 87.92341761200863
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 340,
+      "badgeRate": 4.303908982876969,
+      "refRate": 4.15252016,
+      "devPct": 3.645709522021179,
+      "maxLatitude": 87.92314425984712
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 360,
+      "badgeRate": 4.981425422113679,
+      "refRate": 4.666120959999999,
+      "devPct": 6.757314369186009,
+      "maxLatitude": 87.92302056670626
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 380,
+      "badgeRate": 5.675874449386839,
+      "refRate": 5.1862641599999995,
+      "devPct": 9.44051969359848,
+      "maxLatitude": 87.9234588501205
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 400,
+      "badgeRate": 6.3857317613213285,
+      "refRate": 5.7056,
+      "devPct": 11.920424868924021,
+      "maxLatitude": 87.92247400283284
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 420,
+      "badgeRate": 7.119170924623518,
+      "refRate": 6.216129759999999,
+      "devPct": 14.527386002050227,
+      "maxLatitude": 87.92341761200863
+    },
+    {
+      "route": "KEWR-WSSS",
+      "polar": false,
+      "fl": 440,
+      "badgeRate": 7.861805795320581,
+      "refRate": 6.70920576,
+      "devPct": 17.179381234546927,
+      "maxLatitude": 87.92314425984712
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 280,
+      "badgeRate": 2.2348193819643267,
+      "refRate": 2.7520211199999998,
+      "devPct": -18.79352357716183,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 300,
+      "badgeRate": 2.6706135197641725,
+      "refRate": 3.1986999999999997,
+      "devPct": -16.50940945496068,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 320,
+      "badgeRate": 3.1271836631622754,
+      "refRate": 3.6656275199999997,
+      "devPct": -14.68899537391416,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 340,
+      "badgeRate": 3.603028349558652,
+      "refRate": 4.146970719999999,
+      "devPct": -13.116619507777644,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 360,
+      "badgeRate": 4.094536819174517,
+      "refRate": 4.6362323199999995,
+      "devPct": -11.683959375562143,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 380,
+      "badgeRate": 4.582206768650085,
+      "refRate": 5.126250720000001,
+      "devPct": -10.612901730056533,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 400,
+      "badgeRate": 5.060964569008813,
+      "refRate": 5.6092,
+      "devPct": -9.773861352620473,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 420,
+      "badgeRate": 5.534690635201221,
+      "refRate": 6.076589919999999,
+      "devPct": -8.917818907200148,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "SAWG-SAWB",
+      "polar": true,
+      "fl": 440,
+      "badgeRate": 5.995287024566094,
+      "refRate": 6.5192659200000005,
+      "devPct": -8.037391047762418,
+      "maxLatitude": -64.23829700000002
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 280,
+      "badgeRate": 1.5829148371165895,
+      "refRate": 2.1611360000000013,
+      "devPct": -26.755426908968772,
+      "maxLatitude": 45.68452760653758
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 300,
+      "badgeRate": 1.88318379549307,
+      "refRate": 2.4910000000000005,
+      "devPct": -24.400489944075893,
+      "maxLatitude": 45.68452413740852
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 320,
+      "badgeRate": 2.196232135418743,
+      "refRate": 2.8278240000000014,
+      "devPct": -22.334907143487644,
+      "maxLatitude": 45.684539664841296
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 340,
+      "badgeRate": 2.5207132773353544,
+      "refRate": 3.1664719999999997,
+      "devPct": -20.39363438756589,
+      "maxLatitude": 45.684502333564694
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 360,
+      "badgeRate": 2.854283736045198,
+      "refRate": 3.5018080000000014,
+      "devPct": -18.49114126059462,
+      "maxLatitude": 45.6845385084646
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 380,
+      "badgeRate": 3.183579002799506,
+      "refRate": 3.8286960000000008,
+      "devPct": -16.849522584203466,
+      "maxLatitude": 45.68452760653758
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 400,
+      "badgeRate": 3.501395318974845,
+      "refRate": 4.142000000000001,
+      "devPct": -15.466071487811595,
+      "maxLatitude": 45.68452413740852
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 420,
+      "badgeRate": 3.809885108487223,
+      "refRate": 4.4365840000000025,
+      "devPct": -14.125707785827544,
+      "maxLatitude": 45.684539664841296
+    },
+    {
+      "route": "KLAX-WSSS",
+      "polar": false,
+      "fl": 440,
+      "badgeRate": 4.106297565951305,
+      "refRate": 4.707311999999998,
+      "devPct": -12.767677902987806,
+      "maxLatitude": 45.684502333564694
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 280,
+      "badgeRate": 1.4352168713894708,
+      "refRate": 1.9763039999999994,
+      "devPct": -27.378739738953556,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 300,
+      "badgeRate": 1.7034548679280572,
+      "refRate": 2.274,
+      "devPct": -25.089935447314986,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 320,
+      "badgeRate": 1.9821995906288006,
+      "refRate": 2.576335999999999,
+      "devPct": -23.06129361120594,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 340,
+      "badgeRate": 2.2701949803785473,
+      "refRate": 2.8786079999999985,
+      "devPct": -21.135667642883348,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 360,
+      "badgeRate": 2.565307466966159,
+      "refRate": 3.176111999999999,
+      "devPct": -19.231202584601558,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 380,
+      "badgeRate": 2.8555467492963658,
+      "refRate": 3.4641439999999992,
+      "devPct": -17.568474367798615,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 400,
+      "badgeRate": 3.133766055105447,
+      "refRate": 3.7379999999999978,
+      "devPct": -16.164632019650917,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 420,
+      "badgeRate": 3.402192157953793,
+      "refRate": 3.9929759999999987,
+      "devPct": -14.795577084515557,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "YPPH-EGLL",
+      "polar": false,
+      "fl": 440,
+      "badgeRate": 3.6592637949876,
+      "refRate": 4.224367999999998,
+      "devPct": -13.377248502317949,
+      "maxLatitude": 51.470748
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 280,
+      "badgeRate": 1.623615530739308,
+      "refRate": 1.9959519999999995,
+      "devPct": -18.65458033362984,
+      "maxLatitude": 47.39923228796681
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 300,
+      "badgeRate": 1.9339065293865778,
+      "refRate": 2.291000000000001,
+      "devPct": -15.586794876186069,
+      "maxLatitude": 47.399272110146676
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 320,
+      "badgeRate": 2.257853271932785,
+      "refRate": 2.589647999999999,
+      "devPct": -12.812348553441014,
+      "maxLatitude": 47.39925580775487
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 340,
+      "badgeRate": 2.594086937678778,
+      "refRate": 2.887384000000001,
+      "devPct": -10.157882094006986,
+      "maxLatitude": 47.39925921462339
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 360,
+      "badgeRate": 2.9401596441833364,
+      "refRate": 3.1796960000000007,
+      "devPct": -7.533309971036988,
+      "maxLatitude": 47.399270974523446
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 380,
+      "badgeRate": 3.282116261774899,
+      "refRate": 3.462072,
+      "devPct": -5.197920153743225,
+      "maxLatitude": 47.39923228796681
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 400,
+      "badgeRate": 3.6128207837532984,
+      "refRate": 3.7300000000000004,
+      "devPct": -3.1415339476327615,
+      "maxLatitude": 47.399272110146676
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 420,
+      "badgeRate": 3.9348831745058446,
+      "refRate": 3.978968000000002,
+      "devPct": -1.1079462185711784,
+      "maxLatitude": 47.39925580775487
+    },
+    {
+      "route": "KSFO-WSSS",
+      "polar": false,
+      "fl": 440,
+      "badgeRate": 4.245324358466754,
+      "refRate": 4.204463999999998,
+      "devPct": 0.9718327583909909,
+      "maxLatitude": 47.39925921462339
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 280,
+      "badgeRate": 1.3518057866060234,
+      "refRate": 1.980992,
+      "devPct": -31.7611688181465,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 300,
+      "badgeRate": 1.601698674200246,
+      "refRate": 2.275000000000001,
+      "devPct": -29.59566267251669,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 320,
+      "badgeRate": 1.860633591829881,
+      "refRate": 2.5730880000000007,
+      "devPct": -27.68869188189908,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 340,
+      "badgeRate": 2.127461125131438,
+      "refRate": 2.870744,
+      "devPct": -25.891646028644917,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 360,
+      "badgeRate": 2.4005247600183464,
+      "refRate": 3.163456,
+      "devPct": -24.117017590307995,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 380,
+      "badgeRate": 2.6687384363233946,
+      "refRate": 3.446711999999999,
+      "devPct": -22.571469959677646,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 400,
+      "badgeRate": 2.9244826970627473,
+      "refRate": 3.716000000000001,
+      "devPct": -21.300250348149987,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 420,
+      "badgeRate": 3.1697836041530043,
+      "refRate": 3.9668080000000003,
+      "devPct": -20.092336101142177,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OTBD",
+      "polar": false,
+      "fl": 440,
+      "badgeRate": 3.4036769089030843,
+      "refRate": 4.194623999999999,
+      "devPct": -18.856209545764177,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 280,
+      "badgeRate": 1.327696365904873,
+      "refRate": 1.959504,
+      "devPct": -32.24324288672678,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 300,
+      "badgeRate": 1.572207223902966,
+      "refRate": 2.248,
+      "devPct": -30.061956232074472,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 320,
+      "badgeRate": 1.8253394794082274,
+      "refRate": 2.540016,
+      "devPct": -28.13669365042475,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 340,
+      "badgeRate": 2.0861128781350398,
+      "refRate": 2.8310880000000003,
+      "devPct": -26.314092739786275,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 360,
+      "badgeRate": 2.3528411556439357,
+      "refRate": 3.116752,
+      "devPct": -24.509837303579634,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 380,
+      "badgeRate": 2.614248965939866,
+      "refRate": 3.392544000000002,
+      "devPct": -22.94133942139395,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 400,
+      "badgeRate": 2.8630465724918808,
+      "refRate": 3.654,
+      "devPct": -21.64623501664256,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 420,
+      "badgeRate": 3.1012395909075927,
+      "refRate": 3.896656,
+      "devPct": -20.412795204206052,
+      "maxLatitude": -37.01199
+    },
+    {
+      "route": "NZAA-OMDB",
+      "polar": false,
+      "fl": 440,
+      "badgeRate": 3.3280486868562598,
+      "refRate": 4.1160479999999975,
+      "devPct": -19.144560829799318,
+      "maxLatitude": -37.01199
+    }
+  ]
+}
