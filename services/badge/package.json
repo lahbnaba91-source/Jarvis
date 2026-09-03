@@ -25,7 +25,8 @@
     "test:brief": "node --no-warnings tests/brief/run-brief-tests.js",
     "track": "node --no-warnings cli.js track",
     "test:telemetry": "node --no-warnings tests/telemetry/run-telemetry-tests.js",
-    "test:wearable": "node --no-warnings tests/wearable/run-wearable-tests.js"
+    "test:wearable": "node --no-warnings tests/wearable/run-wearable-tests.js",
+    "validate:altitude": "node --no-warnings tests/validation/run-altitude-validation.js"
   },
   "engines": {
     "node": ">=22"
