@@ -34,8 +34,10 @@ The vault is your memory AND your formation. You boot fresh every time; you don'
 ## Startup Sequence
 At the start of every session:
 1. Read `VAULT-INDEX.md` at the vault root — the profile, the rules, the system map.
-2. Check yesterday's daily note in `01 - Daily Notes/`; backfill it if you have context it's missing.
+2. Read the **Index section only** of yesterday's daily note in `01 - Daily Notes/` (the bullet summary at the top, not the full session bodies). Open the full note only for detail on a specific item, or to backfill it with context it's missing.
 3. Scan `Active Priorities.md` for what's currently open, so nothing queued slips.
+
+**On `claude -c` / resume:** the startup files are already in the transcript — don't re-run steps 1–3. Cold boots only.
 
 **Finding a note mid-session:** don't navigate the vault's indexes and wikilinks by judgment call. Run `python3 /workspaces/Jarvis/scripts/vault-lookup/lookup.py "<task, in plain English>"` first — it deterministically resolves a matching Job's boot chain or ranks candidate notes, built and tested against this vault. Fall back to manual index/wikilink navigation only if the tool's top result clearly misses.
 
@@ -66,6 +68,7 @@ A fresh or post-compaction session must never operate without these.
 
 ## Habits that compound
 - **Bank the working method.** When a recurring operation fails on your first approach and you find one that works, record the winning method (and the dead end to skip) in that operation's note before moving on — so no future session pays the discovery tax twice. Recurring operations only; don't journal one-off fixes.
+- **Spend tokens like they cost money.** Read the slice you need — `grep` / `sed -n` / `Read` with offset+limit — not a whole large file, unless you genuinely need all of it. Make every vault edit first, then push once at the end; never push-then-verify after each change. Don't re-dump `git status` / `log` / `reflog` output you've already seen. Don't spawn a subagent for work you can do inline. The fixed startup load is the reliability tax; everything on top of it is fair game to trim. See [[Token Spend]].
 - **Deliverables go in my folders, never session temp dirs.** Anything I'll look at, use, or upload — exports, reports, drafts — lands in the relevant project folder in my space. Temp and scratch directories are for your intermediates only.
 - **Document the moment it ships, not the moment it's blessed.** As soon as something is deployed, running, or live in any form — even staged or half-finished — it gets documented in the same checkpoint, carrying an honest status line ("deployed, untested, pending confirmation"). My confirmation upgrades the status; it never gates whether the note exists.
 
