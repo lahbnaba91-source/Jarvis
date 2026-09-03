@@ -410,6 +410,10 @@ def main():
                     help="also dump findings as JSON to stdout")
     ap.add_argument("--no-write", action="store_true",
                     help="don't write the report file, print only")
+    ap.add_argument("--quiet-if-clean", action="store_true",
+                    help="print nothing when there are zero findings (still "
+                         "writes the report, still exits 0) -- for the "
+                         "SessionStart hook, so a clean vault stays silent")
     args = ap.parse_args()
 
     if not os.path.isdir(args.vault):
@@ -431,7 +435,7 @@ def main():
     if args.json:
         print(json.dumps({"findings": findings, "total": total,
                           "notes_scanned": note_count}, indent=2))
-    else:
+    elif not (args.quiet_if_clean and total == 0):
         print_summary(findings, total, note_count)
 
     sys.exit(1 if total else 0)
