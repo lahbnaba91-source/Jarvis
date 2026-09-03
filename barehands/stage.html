@@ -260,49 +260,52 @@ SPDX-License-Identifier: AGPL-3.0-or-later
      box + handedness/pose label — a pure visualization layer, reads the
      tracker's landmarks fresh and never touches the tuned gesture gates */
   #skeleton { position:absolute; inset:0; z-index:997; pointer-events:none; }
-  #skelBtn { position:absolute; top:12px; right:12px; z-index:998;
-             background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
-             border:1px solid rgba(140,240,225,0.35); border-radius:8px;
-             padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
-             letter-spacing:0.06em; cursor:pointer; }
-  #skelBtn.on { color:#8ff0e4; border-color:rgba(140,240,225,0.75);
-                box-shadow:0 0 12px rgba(111,229,214,0.35); }
-  #darkBtn { position:absolute; top:12px; right:108px; z-index:998;
-             background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
-             border:1px solid rgba(140,240,225,0.35); border-radius:8px;
-             padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
-             letter-spacing:0.06em; cursor:pointer; }
-  #darkBtn.on { color:#8ff0e4; border-color:rgba(140,240,225,0.75);
-                box-shadow:0 0 12px rgba(111,229,214,0.35); }
-  #recBtn { position:absolute; top:12px; right:190px; z-index:998;
-            background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
-            border:1px solid rgba(140,240,225,0.35); border-radius:8px;
-            padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
-            letter-spacing:0.06em; cursor:pointer; }
+  /* TOP OPTIONS DOCK (2026-08-30): SKELETON/DARK/RECORD/CAM/TRACK/
+     SETTINGS/CALIBRATE/GPU used to be individually absolute-positioned
+     with hand-tallied right:px offsets -- every new button meant
+     re-computing everyone to its left. Collapsed into one dock now,
+     the expand/collapse lifted from ai-visualizer's skiper4 "Toggle Row"
+     face: a round handle pins to the corner, a pill beside it
+     expands/collapses via grid-template-columns (0fr <-> 1fr) with the
+     buttons blur/scale-fading in on open -- same easing and timing as
+     that face's version, just horizontal instead of vertical. */
+  #topDock { position:absolute; top:12px; right:12px; z-index:998;
+             display:flex; flex-direction:row-reverse; align-items:center;
+             gap:10px; }
+  #topDockHandle { width:68px; height:68px; flex:0 0 auto; border-radius:50%;
+                   background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
+                   border:1px solid rgba(140,240,225,0.35); cursor:pointer;
+                   font-size:36px; line-height:1; display:flex;
+                   align-items:center; justify-content:center;
+                   transition:transform 0.15s ease, background 0.15s ease; }
+  #topDockHandle:active { transform:scale(0.92); }
+  #topDockHandle.open { color:#8ff0e4; border-color:rgba(140,240,225,0.75);
+                        box-shadow:0 0 12px rgba(111,229,214,0.35); }
+  #topDockPill { display:grid; grid-template-columns:0fr; overflow:hidden;
+                 transition:grid-template-columns 0.5s cubic-bezier(.34,1.56,.64,1); }
+  #topDockPill.open { grid-template-columns:1fr; }
+  #topDockInner { overflow:hidden; min-width:0; }
+  #topDockRow { display:flex; align-items:center; gap:8px; padding:0 2px;
+                white-space:nowrap; }
+  #topDockRow button { opacity:0; transform:scale(0.5); filter:blur(4px);
+                        transition:opacity 0.3s ease, transform 0.3s ease,
+                                   filter 0.3s ease; }
+  #topDockPill.open #topDockRow button { opacity:1; transform:scale(1);
+                                          filter:blur(0); transition-delay:0.2s; }
+  #skelBtn, #darkBtn, #recBtn, #camBtn, #trackBtn, #settingsBtn,
+  #calBtn, #delegateBtn {
+    background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
+    border:1px solid rgba(140,240,225,0.35); border-radius:8px;
+    padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
+    letter-spacing:0.06em; cursor:pointer; flex:0 0 auto; }
+  #skelBtn.on, #darkBtn.on, #camBtn.on, #trackBtn.on, #delegateBtn.on {
+    color:#8ff0e4; border-color:rgba(140,240,225,0.75);
+    box-shadow:0 0 12px rgba(111,229,214,0.35); }
   #recBtn.rec { color:#ff8a8a; border-color:rgba(255,110,110,0.8);
                 box-shadow:0 0 12px rgba(255,90,90,0.45); }
-  #camBtn { position:absolute; top:12px; right:272px; z-index:998;
-            background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
-            border:1px solid rgba(140,240,225,0.35); border-radius:8px;
-            padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
-            letter-spacing:0.06em; cursor:pointer; }
-  #camBtn.on { color:#8ff0e4; border-color:rgba(140,240,225,0.75);
-               box-shadow:0 0 12px rgba(111,229,214,0.35); }
   /* hand-tracking toggle: stays disabled/greyed until a paired remote
      camera (phone 2) actually delivers a video track -- it only ever
      becomes clickable in response to a real connection, never a guess */
-  #trackBtn { position:absolute; top:12px; right:354px; z-index:998;
-              background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
-              border:1px solid rgba(140,240,225,0.35); border-radius:8px;
-              padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
-              letter-spacing:0.06em; cursor:pointer; }
-  #trackBtn.on { color:#8ff0e4; border-color:rgba(140,240,225,0.75);
-                 box-shadow:0 0 12px rgba(111,229,214,0.35); }
-  #settingsBtn { position:absolute; top:12px; right:436px; z-index:998;
-                 background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
-                 border:1px solid rgba(140,240,225,0.35); border-radius:8px;
-                 padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
-                 letter-spacing:0.06em; cursor:pointer; }
   /* GESTURE SETTINGS PANEL (2026-08-27): every threshold that used to
      mean "ask Claude to hand-edit stage.html" now lives here instead --
      toggles + sliders, persisted server-side via POST /config (see
@@ -334,23 +337,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   #settingsHud #settingsSave { color:#8ff0e4; border-color:rgba(140,240,225,0.85); }
   #settingsHud .status { font-size:11px; color:#7fb3ab; margin-top:10px; min-height:14px; }
   body.overlay #settingsHud, body.keybg #settingsHud { display:none !important; }
-  #calBtn { position:absolute; top:12px; right:530px; z-index:998;
-            background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
-            border:1px solid rgba(140,240,225,0.35); border-radius:8px;
-            padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
-            letter-spacing:0.06em; cursor:pointer; }
   /* hand-tracking backend toggle (2026-08-30): swaps HandLandmarker
      between GPU (Metal/WebGL delegate) and CPU (WASM/XNNPACK) live, for
      testing responsiveness against the GPU-contention issues logged
      above (the removed body-segmenter). Label always shows the mode
      that's actually active, not a fixed word. */
-  #delegateBtn { position:absolute; top:12px; right:626px; z-index:998;
-                 background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
-                 border:1px solid rgba(140,240,225,0.35); border-radius:8px;
-                 padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
-                 letter-spacing:0.06em; cursor:pointer; }
-  #delegateBtn.on { color:#8ff0e4; border-color:rgba(140,240,225,0.75);
-                    box-shadow:0 0 12px rgba(111,229,214,0.35); }
   /* CALIBRATION WIZARD (2026-08-27): guided onboarding, built on top of
      the exact same RECORD IMAGE capture path a dev already used by hand
      (saveTake/runImageCapture, see the recorder section) -- this just
@@ -375,7 +366,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                    background:rgba(0,0,0,0.7); color:rgba(230,255,240,0.9);
                    border:1px solid rgba(140,240,225,0.55); }
   #calHud #calStart { color:#8ff0e4; border-color:rgba(140,240,225,0.85); }
-  body.overlay #calBtn, body.keybg #calBtn,
   body.overlay #calHud, body.keybg #calHud { display:none !important; }
   /* remote-camera pairing overlay: shows the PIN + link for the second
      phone, then a connecting/connected status. Pure readout + one
@@ -430,13 +420,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                        background:rgba(0,0,0,0.7); color:rgba(230,255,240,0.9);
                        border:1px solid rgba(140,240,225,0.55); }
   #recChoice button:active { background:rgba(111,229,214,0.28); }
-  body.overlay #skelBtn, body.keybg #skelBtn,
-  body.overlay #darkBtn, body.keybg #darkBtn,
-  body.overlay #recBtn, body.keybg #recBtn,
-  body.overlay #camBtn, body.keybg #camBtn,
-  body.overlay #trackBtn, body.keybg #trackBtn,
-  body.overlay #settingsBtn, body.keybg #settingsBtn,
-  body.overlay #delegateBtn, body.keybg #delegateBtn { display:none; }
+  body.overlay #topDock, body.keybg #topDock { display:none; }
   /* GLASS ERA: the item layer is a real 3D SPACE — every card, panel,
      and widget can rotate in Z (hold-latch); default pose is flat.
      (The 8/11 depth-mask person-segmenter that masked this layer was
@@ -496,7 +480,17 @@ setTimeout(function () {
 <div id="boot">BAREHANDS<br><span style="color:#a8d8cf;font-size:12px;letter-spacing:0.22em">by jaredrhod</span><br><span style="color:#a8d8cf;font-size:13px">loading hand tracker… allow the camera when asked</span></div>
 <div id="hint">tap the RING = orbs · tap an orb = its tree · TAP a card = open · pinch-drag = move · hold still ~1s = 3D rotate · two hands = scale · TAP an open item = close · CLAP (palms together, fingers up) = ring center-stage · CLAW: flash open, finger-gun (thumb+index out) to aim, hold 2.5s for the shake, curl index to thumb-only to fire = force pull · MIDDLE FINGER (alone, held ~2s) = Gestures bubble · empty pinch dragged sideways = explode scrub · FLICK (pinch thumb+index like a click, then snap them apart fast) = shoot the grabbed item off screen · SPIN (hold an item with one hand, snap-pinch the OTHER hand empty-handed) = spins the held item for 4s then eases to a stop · R respawn / C camera / D debug / CAM = pair a phone's camera</div>
 <div id="debug"></div>
-<button id="skelBtn" type="button">SKELETON</button><button id="darkBtn" type="button">DARK</button><button id="recBtn" type="button">RECORD</button><button id="camBtn" type="button">CAM</button><button id="trackBtn" type="button">TRACK</button><button id="settingsBtn" type="button">SETTINGS</button><button id="calBtn" type="button">CALIBRATE</button><button id="delegateBtn" type="button">GPU</button><div id="toast"></div><div id="handIndicator"></div>
+<div id="topDock">
+<button id="topDockHandle" type="button" aria-label="toggle options">&#8942;</button>
+<div id="topDockPill">
+<div id="topDockInner">
+<div id="topDockRow">
+<button id="skelBtn" type="button">SKELETON</button><button id="darkBtn" type="button">DARK</button><button id="recBtn" type="button">RECORD</button><button id="camBtn" type="button">CAM</button><button id="trackBtn" type="button">TRACK</button><button id="settingsBtn" type="button">SETTINGS</button><button id="calBtn" type="button">CALIBRATE</button><button id="delegateBtn" type="button">GPU</button>
+</div>
+</div>
+</div>
+</div>
+<div id="toast"></div><div id="handIndicator"></div>
 <div id="calHud">
   <div class="step" id="calStep"></div>
   <div class="title" id="calTitle"></div>
@@ -600,6 +594,12 @@ const BEHIND = document.getElementById("behind");
 const dbg = document.getElementById("debug");
 const skelCv = document.getElementById("skeleton");
 const skelCtx = skelCv.getContext("2d");
+const topDockHandle = document.getElementById("topDockHandle");
+const topDockPill = document.getElementById("topDockPill");
+topDockHandle.addEventListener("click", () => {
+  const open = topDockPill.classList.toggle("open");
+  topDockHandle.classList.toggle("open", open);
+});
 const skelBtn = document.getElementById("skelBtn");
 let SKEL_ON = false;
 skelBtn.addEventListener("click", () => {
@@ -1151,6 +1151,36 @@ function _ac() {
   return AC;
 }
 addEventListener("keydown", _ac); addEventListener("click", _ac);
+
+// SFX UNLOCK (2026-08-30): the dun-dun/yeah clips are plain HTMLAudioElements
+// fired from a gesture-recognition loop, not a real click/tap -- Chrome's
+// autoplay policy blocks that silently (play().catch(() => {}) swallows the
+// rejection), so the toast fires but nothing plays. Same fix as _ac() above:
+// prime both clips on the page's first real click/keydown so later scripted
+// .play() calls are already unlocked.
+// {once:true} on two DIFFERENT event types (keydown/click) only removes
+// the one that actually fired -- the other stays armed. Without this
+// guard, hitting a hotkey (R/C/D/H/SPACE) while a dun-dun/yeah clip is
+// mid-play re-runs the unlock, which mutes+pauses+rewinds a clip that's
+// currently playing (ultrareview catch, 2026-08-30).
+let sfxUnlocked = false;
+function _unlockSfxAudio() {
+  if (sfxUnlocked) return;
+  sfxUnlocked = true;
+  if (!gunAudio) gunAudio = new Audio("/media/sfx/svu-dun-dun.mp3");
+  if (!peaceAudio) peaceAudio = new Audio("/media/sfx/yeah.mp3");
+  // muted during the prime -- unmuted play+immediate pause still has an
+  // audible decode/start blip before pause() lands, which is exactly the
+  // "click plays yeah/tun-tun" bug this caused. Muted play satisfies the
+  // same unlock without ever making sound.
+  [gunAudio, peaceAudio].forEach(a => {
+    a.muted = true;
+    a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; })
+      .catch(() => { a.muted = false; });
+  });
+}
+addEventListener("keydown", _unlockSfxAudio, { once: true });
+addEventListener("click", _unlockSfxAudio, { once: true });
 
 function _noise(dur, fLo, fHi, gain, sweepTo) {
   if (!SOUND) return;
@@ -2378,7 +2408,13 @@ async function startCam(deviceId) {
   cam.srcObject = null;
   const IW = PORTRAIT ? Math.min(...RES) : Math.max(...RES);
   const IH = PORTRAIT ? Math.max(...RES) : Math.min(...RES);
-  const video = { width: { ideal: IW }, height: { ideal: IH } };
+  // 2026-08-30 (Luis's ask): ideal 60fps, not just resolution -- straight
+  // at the blur/drop problem already diagnosed above (fast hands smear at
+  // whatever fps the camera defaulted to, and re-acquisition eats frames
+  // that read as grab-lag). `ideal`, not `exact`, so a camera that only
+  // offers 30fps still opens instead of failing outright.
+  const video = { width: { ideal: IW }, height: { ideal: IH },
+                   frameRate: { ideal: 60 } };
   if (deviceId) video.deviceId = { exact: deviceId };
   let stream = null;
   try {
@@ -2395,7 +2431,8 @@ async function startCam(deviceId) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { deviceId: { exact: d.deviceId },
-                   width: { ideal: IW }, height: { ideal: IH } },
+                   width: { ideal: IW }, height: { ideal: IH },
+                   frameRate: { ideal: 60 } },
           audio: false });
         break;
       } catch (e2) {}
@@ -3018,15 +3055,36 @@ function fireRockOn() {
 }
 let gunHoldSince = 0, gunFired = false;
 // FINGER GUN (2026-08-27, Luis's call): plays the SVU sting, hard-capped
-// at 9s even though the source clip runs ~55s.
+// at 5s even though the source clip runs ~55s -- the last 1.5s of that
+// ride a linear volume fade to 0 (2026-08-30, Luis's call) instead of
+// a hard cutoff.
 let gunAudio = null;
 let gunStopTimer = null;
+let gunFadeTimer = null;
+const GUN_DURATION_MS = 5000;
+const GUN_FADE_MS = 1500;
 function fireFingerGun() {
   if (gunStopTimer) clearTimeout(gunStopTimer);
+  if (gunFadeTimer) clearInterval(gunFadeTimer);
   if (!gunAudio) gunAudio = new Audio("/media/sfx/svu-dun-dun.mp3");
   gunAudio.currentTime = 0;
+  gunAudio.volume = 1;
   gunAudio.play().catch(() => {});
-  gunStopTimer = setTimeout(() => { gunAudio.pause(); gunAudio.currentTime = 0; }, 9000);
+  gunStopTimer = setTimeout(() => {
+    const stepMs = 50;
+    const steps = GUN_FADE_MS / stepMs;
+    let i = 0;
+    gunFadeTimer = setInterval(() => {
+      i++;
+      gunAudio.volume = Math.max(0, 1 - i / steps);
+      if (i >= steps) {
+        clearInterval(gunFadeTimer);
+        gunAudio.pause();
+        gunAudio.currentTime = 0;
+        gunAudio.volume = 1;
+      }
+    }, stepMs);
+  }, GUN_DURATION_MS - GUN_FADE_MS);
   toast("🔫 DUN DUN", 1400);
 }
 let peaceHoldSince = 0, peaceFired = false;
@@ -3153,6 +3211,35 @@ function depthSmoother(halfLifeMs = 220) {
     return prev;
   };
 }
+// DEPTH PUSH/PULL (2026-08-27, showcase build; 2026-08-30, extended to
+// panels/browsers on Luis's call): shared by both the "move" (bar-grab)
+// and "quickmove" (body-grab) branches below, since notes/folders reach
+// depth-eligible carrying through either one. Continuous, not a discrete
+// trigger -- while carrying with one hand, moving the WHOLE hand toward/
+// away from the camera changes its apparent size (span). Bigger span
+// since grab = closer = PULL (item grows toward you); smaller = PUSH
+// (recedes). Layers on top of whatever scale a prior two-hand stretch
+// already set; same [0.12, 12] ceiling/floor that gesture uses. Direction
+// is a best inference (monocular size-from-distance), not yet verified
+// against real footage -- a one-line sign flip if it reads backwards
+// live. RE-ARM ON NULL (snap-back fix): endGrab nulls depthSpan0 on the
+// 2->1 hand transition; when null here, re-arm fresh from the CURRENT
+// scale/span instead of a stale pre-stretch one. Orbs are excluded --
+// they're pinned tap targets that never move, so beginGrab never arms a
+// baseline for them and this is never called for one.
+function applyDepthPushPull(held, lms, now) {
+  if (held.type === "orb") return;
+  const span = lmSpan(lms);
+  if (!held.depthSpan0) {
+    held.depthSpan0 = span;
+    held.depthScale0 = held.scale;
+    held.depthF = depthSmoother();
+    held.depthF(1, now);
+  } else {
+    const ratio = held.depthF(span / held.depthSpan0, now);
+    held.scale = Math.min(12, Math.max(0.12, held.depthScale0 * ratio));
+  }
+}
 const LM_JUMP_CEIL = 0.9;   // span-units a landmark may move in one raw
                             // frame before it's an occlusion outlier
 const LM_STUCK_MAX = 3;     // consecutive frames a landmark may be held
@@ -3228,23 +3315,46 @@ function beginGrab(c, i, cur, lms) {
   // CATCH (2026-08-26, Luis's ask -- "grab it again, it decelerates,
   // like a fidget toy to pass time with"): catching a live FLICK-spin
   // shouldn't freeze it instantly -- compress its remaining ease-out
-  // into a quick graceful wind-down instead, from wherever it currently
-  // sits toward the same target it was already heading to. wasBigSpin
-  // remembers the catch through to endGrab, so an immediate re-flick can
-  // relaunch the spin without re-earning rotate mode's 2.65s latch again
-  // -- one-shot, consumed (cleared) by endGrab whether or not it's used.
-  // An ordinary small settle-back (not a big spin) still cancels outright
-  // -- that one was never meant to be caught mid-motion.
+  // into a quick graceful wind-down instead. wasBigSpin remembers the
+  // catch through to endGrab, so an immediate re-flick can relaunch the
+  // spin without re-earning rotate mode's 2.65s latch again -- one-shot,
+  // consumed (cleared) by endGrab whether or not it's used. An ordinary
+  // small settle-back (not a big spin) still cancels outright -- that one
+  // was never meant to be caught mid-motion.
+  // 2026-08-30 (Luis's ask -- "orb, folder, file, or anything... ends up
+  // turned the correct side facing me"): a catch used to just wind the
+  // spin down wherever it was already heading, which for a big spin-out
+  // is however it happened to be facing at the instant of the ORIGINAL
+  // flick (12 full turns from there lands right back on that same angle)
+  // -- not necessarily readable. Both catch paths below now retarget to
+  // the NEAREST front-facing multiple of 2*PI instead, so grabbing a
+  // spinning item always both slows it down AND turns it to face you.
+  // No type check here (never had one) -- applies to every item type.
   c.wasBigSpin = false;
+  const twoPi = Math.PI * 2;
   if (c.settleUntil) {
     if (c.bigSpin) {
       const now = performance.now();
       c.settleFromRy = c.ry || 0; c.settleFromRx = c.rx || 0;
+      c.settleTargetRy = Math.round(c.settleFromRy / twoPi) * twoPi;
+      c.settleTargetRx = Math.round(c.settleFromRx / twoPi) * twoPi;
       c.settleStart = now; c.settleUntil = now + 400;
       c.wasBigSpin = true;
     } else {
       c.settleUntil = null;
     }
+  } else if (c.spinUntil) {
+    // catching a SPIN-gesture momentum spin (two-hand snap-pinch) mid-
+    // flight -- same treatment as a caught flick-spin above, reusing the
+    // exact settle fields/physics block so no new animation code is
+    // needed. Clears spinUntil/rvy so physics()'s own decay doesn't keep
+    // fighting the settle for the same rx/ry properties.
+    const now = performance.now();
+    c.settleFromRy = c.ry || 0; c.settleFromRx = c.rx || 0;
+    c.settleTargetRy = Math.round(c.settleFromRy / twoPi) * twoPi;
+    c.settleTargetRx = Math.round(c.settleFromRx / twoPi) * twoPi;
+    c.settleStart = now; c.settleUntil = now + 400;
+    c.spinUntil = null; c.rvy = 0;
   }
   c.bigSpin = false;
   c.grabbedBy.push(i);
@@ -3316,17 +3426,20 @@ function beginGrab(c, i, cur, lms) {
       c.tapX = cur.x; c.tapY = cur.y;   // v3: card tap-open discrimination
     }
     // DEPTH PUSH/PULL baseline (2026-08-27, showcase build): captured
-    // once at grab-start, for every single-hand hold except panels/
-    // browsers (their pixel size is deliberately FIXED so tracker/render
-    // text-wrap stays 1:1 -- see the v20.4 comment on .panel above;
-    // scaling would break that) and orbs (never move at all). Uses the
-    // hand's own wrist-to-knuckle span (lmSpan) as a monocular
-    // depth-from-apparent-size proxy -- an image-space landmark z is
-    // relative to the WRIST (always ~0 there by definition), so it can't
-    // see whole-hand toward/away motion at all; span, which every other
-    // gesture in this file already treats as "how far is this hand from
-    // the camera," can.
-    if (lms && c.type !== "panel" && c.type !== "browser" && c.type !== "orb") {
+    // once at grab-start, for every single-hand hold except orbs (never
+    // move at all). Uses the hand's own wrist-to-knuckle span (lmSpan) as
+    // a monocular depth-from-apparent-size proxy -- an image-space
+    // landmark z is relative to the WRIST (always ~0 there by
+    // definition), so it can't see whole-hand toward/away motion at all;
+    // span, which every other gesture in this file already treats as
+    // "how far is this hand from the camera," can.
+    // 2026-08-30 (Luis's call, reversing the panel/browser exclusion):
+    // notes/folders used to be left out here because their pixel size was
+    // fixed to keep text-wrap 1:1 (see the v20.4 comment on .panel
+    // above) -- he wants depth push/pull on them anyway, wrap quirks
+    // accepted. Still excluded from ANY panel/browser reflow logic that
+    // assumed a stable size; this only changes how big they render.
+    if (lms && c.type !== "orb") {
       c.depthSpan0 = lmSpan(lms);
       c.depthScale0 = c.scale;
       // smooths the span/depthSpan0 ratio physics() applies to scale each
@@ -4625,6 +4738,10 @@ async function boot() {
             // is what makes a body-grabbed window reach rotate at all --
             // it used to be reachable only via a bar-grab.
             held.x = cur.x + held.ox; held.y = cur.y + held.oy;
+            // 2026-08-30 (Luis's call): body-grabbed panels/browsers get
+            // depth push/pull too now, not just bar-grabbed ones -- see
+            // applyDepthPushPull's comment above.
+            applyDepthPushPull(held, lms, now);
             const mp = Math.min((performance.now() - held.holdT) / CFG.gestures.rotateLatchMs, 1);
             const dragDist = Math.hypot(cur.x - held.holdX, cur.y - held.holdY);
             const stillEnough = dragDist < CFG.gestures.rotateDragCancelPx;
@@ -4746,41 +4863,7 @@ async function boot() {
             // to EVERY item — carried like a card; hold roughly still
             // ~1s and it latches into 3D rotate (drift re-anchors)
             held.x = cur.x + held.ox; held.y = cur.y + held.oy;
-            // DEPTH PUSH/PULL (2026-08-27, showcase build): continuous,
-            // not a discrete trigger -- while carrying with one hand,
-            // moving the WHOLE hand toward/away from the camera changes
-            // its apparent size (span). Bigger span since grab = closer
-            // = PULL (item grows toward you); smaller = PUSH (recedes).
-            // Layers on top of whatever scale a prior two-hand stretch
-            // already set; same [0.12, 12] ceiling/floor that gesture
-            // uses. Direction is a best inference (monocular
-            // size-from-distance), not yet verified against real
-            // footage -- a one-line sign flip if it reads backwards live.
-            // RE-ARM ON NULL (2026-08-27, snap-back fix): previously the
-            // baseline was only ever captured once, in beginGrab's FIRST
-            // single-hand grab -- so dropping out of a two-hand stretch
-            // back to one hand kept reapplying that stale, pre-stretch
-            // baseline forever, snapping the item back to its original
-            // size every frame after release. endGrab now nulls
-            // depthSpan0 on the 2->1 transition; when null here (and the
-            // type is depth-eligible -- same exclusion beginGrab already
-            // applies to panel/browser/orb), re-arm fresh from the
-            // CURRENT scale/span instead of a stale one, so depth push/
-            // pull picks up smoothly from wherever the stretch left it.
-            if (held.type !== "panel" && held.type !== "browser" &&
-                held.type !== "orb") {
-              const span = lmSpan(lms);
-              if (!held.depthSpan0) {
-                held.depthSpan0 = span;
-                held.depthScale0 = held.scale;
-                held.depthF = depthSmoother();
-                held.depthF(1, now);
-              } else {
-                const ratio = held.depthF(span / held.depthSpan0, now);
-                held.scale = Math.min(12, Math.max(0.12,
-                  held.depthScale0 * ratio));
-              }
-            }
+            applyDepthPushPull(held, lms, now);   // see the function above
             // UNIVERSAL 3D-GRAB (2026-08-27, Luis's ask -- activation felt
             // slow/unreliable because it depended on WHERE the grab
             // landed: a circle's bounding-box corners sit outside the
