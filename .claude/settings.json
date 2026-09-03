@@ -8,6 +8,14 @@
             "command": "mkdir -p /workspaces/Jarvis/.voice-bus /workspaces/Jarvis/barehands/state && echo idle > /workspaces/Jarvis/.voice-bus/.voice_state && printf idle > /workspaces/Jarvis/barehands/state/state"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/Jarvis/scripts/claude-quota/hook.sh session"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -16,6 +24,25 @@
           {
             "type": "command",
             "command": "echo thinking > /workspaces/Jarvis/.voice-bus/.voice_state && printf thinking > /workspaces/Jarvis/barehands/state/state"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/Jarvis/scripts/claude-quota/hook.sh prompt"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/Jarvis/scripts/claude-quota/hook.sh tool"
           }
         ]
       }
