@@ -16,6 +16,14 @@
             "command": "bash /workspaces/Jarvis/scripts/claude-quota/hook.sh session"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /workspaces/Jarvis/scripts/vault-audit/audit.py --quiet-if-clean || true"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
