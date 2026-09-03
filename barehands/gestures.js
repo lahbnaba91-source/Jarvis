@@ -59,6 +59,17 @@
     return e[0] && e[1] && !e[2] && !e[3];
   }
 
+  // SHUSH: index alone extended, thumb + other three curled -- the "one
+  // finger to the lips" hand shape. Pose-only here; stage.html gates it
+  // further on the fingertip actually sitting near the FaceDetector's
+  // mouth keypoint, which is what makes it a real shush and not just a
+  // point. Distinct from middleUpSign (middle alone) and from
+  // clawPose/fingerGunSign (both need the thumb OUT).
+  function shushSign(lms) {
+    const e = extArr(lms);
+    return e[0] && !e[1] && !e[2] && !e[3] && !thumbExtended(lms);
+  }
+
   // FORCE-PULL CHARGE/AIM ("the claw"): thumb + index out, other three
   // curled. Fitted from real recorded takes (thumb 1.56-1.65, index
   // 1.87-2.47, others 1.16-1.40 -- see state/gesture_log.jsonl).
@@ -113,9 +124,27 @@
     return thumbExtended(lms) && e[0] && tight;
   }
 
+  // FIST: all four fingers curled AND thumb curled -- the "rock" throw
+  // for rock-paper-scissors. A fist while CARRYING an item is the
+  // force-pull hold, so stage.html only reads this when nothing's
+  // grabbed.
+  function fistSign(lms) {
+    const e = extArr(lms);
+    return !e[0] && !e[1] && !e[2] && !e[3] && !thumbExtended(lms);
+  }
+
+  // OPEN PALM: all four fingers extended -- the "paper" throw. Thumb is
+  // not required either way (it reads inconsistently splayed vs tucked
+  // across real hands); the four-finger fan is the reliable tell.
+  function openPalmSign(lms) {
+    const e = extArr(lms);
+    return e[0] && e[1] && e[2] && e[3];
+  }
+
   const GESTURES = {
     wristRatio, extArr, thumbExtended,
-    rockSign, middleUpSign, peaceSign, clawPose, snapPose, fingerGunSign,
+    rockSign, middleUpSign, peaceSign, shushSign, fistSign, openPalmSign,
+    clawPose, snapPose, fingerGunSign,
   };
 
   if (typeof module !== "undefined" && module.exports) {
