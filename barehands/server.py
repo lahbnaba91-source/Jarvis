@@ -37,7 +37,9 @@ Endpoints:
   GET  /spotify/callback       OAuth redirect target, caches the refresh token
   POST /spotify/play           start SPOTIFY_TRACK on the active device
   POST /spotify/pause          pause playback on the active device
+  POST /spotify/resume         resume playback (un-shush)
   GET  /spotify/status         {"authed": bool}
+  GET  /spotify/progress       {"is_playing", "progress_ms", "item"}
   POST /show/start             play SHOW_CUES_PATH in sync with live playback
   POST /show/stop              cancel the running light show, if any
   GET  /config                 the barehands.json config (name + orbs + gestures)
@@ -129,6 +131,9 @@ DEFAULT_GESTURES = {
     "rockOn": True,          # horns sign -> Spotify + light show
     "fingerGun": True,       # dun-dun pose -> SVU sting
     "peaceSign": True,       # double peace sign -> "Yeah!"
+    "shush": True,           # finger on lips (face-gated) -> pause Spotify
+    "rps": True,             # rock/paper/scissors throw -> play vs Jarvis
+    "pileDeck": True,        # 3+ open folders/tabs -> pile; pinch-sweep pages
     "rotateDragCancelPx": 800,  # px of drag since the hold started that
                              # cancels the 3D-rotate latch -- replaces the
                              # old position-based (corner/bar-only) gate:
@@ -486,6 +491,9 @@ GESTURE_FIELDS = {
     "rockOn": lambda v: bool(v),
     "fingerGun": lambda v: bool(v),
     "peaceSign": lambda v: bool(v),
+    "shush": lambda v: bool(v),
+    "rps": lambda v: bool(v),
+    "pileDeck": lambda v: bool(v),
     "rotateDragCancelPx": lambda v: clamp(v, 200, 3000, cast=int),
     "rotateLatchMs": lambda v: clamp(v, 300, 5000, cast=int),
     "fingerGunCurl": lambda v: clamp(v, 0.3, 1.4),
@@ -703,6 +711,11 @@ class Handler(SimpleHTTPRequestHandler):
             result, code = spotify_call("pause")
             self._json(result, code)
             return
+        if self.path == "/spotify/resume":
+            # THE SHUSH's un-shush -- resume, not force a track like /play
+            result, code = spotify_call("resume")
+            self._json(result, code)
+            return
         if self.path == "/show/start":
             start_show()
             self.send_response(204)
@@ -805,6 +818,12 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if self.path == "/spotify/status":
             result, code = spotify_call("status")
+            self._json(result, code)
+            return
+        if self.path == "/spotify/progress":
+            # {is_playing, progress_ms, item} -- THE SHUSH checks
+            # is_playing before doing anything (no music = no-op)
+            result, code = spotify_call("progress")
             self._json(result, code)
             return
         if self.path == "/spotify/login":

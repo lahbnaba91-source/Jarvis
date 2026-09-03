@@ -367,6 +367,27 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                    border:1px solid rgba(140,240,225,0.55); }
   #calHud #calStart { color:#8ff0e4; border-color:rgba(140,240,225,0.85); }
   body.overlay #calHud, body.keybg #calHud { display:none !important; }
+  /* ROCK PAPER SCISSORS vs Jarvis (2026-09-03) -- a compact centred
+     readout, NOT a full-screen backdrop: pointer-events:none and no
+     inset:0 so it never blocks the board or hand tracking underneath. */
+  #rpsHud { position:absolute; left:50%; top:22%; transform:translateX(-50%);
+            display:none; z-index:1000; pointer-events:none; text-align:center;
+            font:15px "SF Mono",Menlo,monospace; color:#dff3ee;
+            text-shadow:0 2px 10px rgba(0,0,0,0.85);
+            background:rgba(0,0,0,0.62); border:1px solid rgba(140,240,225,0.35);
+            border-radius:14px; padding:18px 30px; min-width:240px; }
+  #rpsHud.on { display:block; }
+  #rpsHud .count { font-size:60px; font-weight:700; color:#8ff0e4;
+                   text-shadow:0 0 30px rgba(111,229,214,0.5); min-height:66px;
+                   line-height:1; }
+  #rpsHud .throws { font-size:44px; min-height:52px; letter-spacing:0.12em; }
+  #rpsHud .verdict { font-size:20px; font-weight:700; margin-top:4px; min-height:24px; }
+  #rpsHud .verdict.win { color:#7dffa8; }
+  #rpsHud .verdict.lose { color:#ff8a8a; }
+  #rpsHud .verdict.tie { color:#e8d98a; }
+  #rpsHud .score { font-size:12px; color:#a8d8cf; letter-spacing:0.1em;
+                   margin-top:8px; }
+  body.overlay #rpsHud, body.keybg #rpsHud { display:none !important; }
   /* remote-camera pairing overlay: shows the PIN + link for the second
      phone, then a connecting/connected status. Pure readout + one
      Cancel button, same non-blocking spirit as recHud above. */
@@ -478,7 +499,7 @@ setTimeout(function () {
 <canvas id="skeleton"></canvas>
 <div id="behind"></div>
 <div id="boot">BAREHANDS<br><span style="color:#a8d8cf;font-size:12px;letter-spacing:0.22em">by jaredrhod</span><br><span style="color:#a8d8cf;font-size:13px">loading hand tracker… allow the camera when asked</span></div>
-<div id="hint">tap the RING = orbs · tap an orb = its tree · TAP a card = open · pinch-drag = move · hold still ~1s = 3D rotate · two hands = scale · TAP an open item = close · CLAP (palms together, fingers up) = ring center-stage · CLAW: flash open, finger-gun (thumb+index out) to aim, hold 2.5s for the shake, curl index to thumb-only to fire = force pull · MIDDLE FINGER (alone, held ~2s) = Gestures bubble · empty pinch dragged sideways = explode scrub · FLICK (pinch thumb+index like a click, then snap them apart fast) = shoot the grabbed item off screen · SPIN (hold an item with one hand, snap-pinch the OTHER hand empty-handed) = spins the held item for 4s then eases to a stop · R respawn / C camera / D debug / CAM = pair a phone's camera</div>
+<div id="hint">tap the RING = orbs · tap an orb = its tree · TAP a card = open · pinch-drag = move · hold still ~1s = 3D rotate · two hands = scale · TAP an open item = close · CLAP (palms together, fingers up) = ring center-stage · CLAW: flash open, finger-gun (thumb+index out) to aim, hold 2.5s for the shake, curl index to thumb-only to fire = force pull · MIDDLE FINGER (alone, held ~2s) = Gestures bubble · SHUSH (finger on your lips) = pause Spotify · ROCK / PAPER / SCISSORS (hold the throw ~1s) = play Jarvis · 3+ open folders/tabs pile up — pinch + fast sweep R→L = next, L→R = previous · empty pinch dragged sideways = explode scrub · FLICK (pinch thumb+index like a click, then snap them apart fast) = shoot the grabbed item off screen · SPIN (hold an item with one hand, snap-pinch the OTHER hand empty-handed) = spins the held item for 4s then eases to a stop · R respawn / C camera / D debug / CAM = pair a phone's camera</div>
 <div id="debug"></div>
 <div id="topDock">
 <button id="topDockHandle" type="button" aria-label="toggle options">&#8942;</button>
@@ -491,6 +512,12 @@ setTimeout(function () {
 </div>
 </div>
 <div id="toast"></div><div id="handIndicator"></div>
+<div id="rpsHud">
+  <div class="count" id="rpsCount"></div>
+  <div class="throws" id="rpsThrows"></div>
+  <div class="verdict" id="rpsVerdict"></div>
+  <div class="score" id="rpsScore"></div>
+</div>
 <div id="calHud">
   <div class="step" id="calStep"></div>
   <div class="title" id="calTitle"></div>
@@ -511,6 +538,12 @@ setTimeout(function () {
       <input type="checkbox" id="gsFingerGun"></div>
     <div class="row"><label for="gsPeaceSign">✌️ DOUBLE PEACE (Yeah!)</label>
       <input type="checkbox" id="gsPeaceSign"></div>
+    <div class="row"><label for="gsShush">🤫 SHUSH (finger on lips → pause Spotify)</label>
+      <input type="checkbox" id="gsShush"></div>
+    <div class="row"><label for="gsRps">✊✋✌️ ROCK PAPER SCISSORS vs Jarvis</label>
+      <input type="checkbox" id="gsRps"></div>
+    <div class="row"><label for="gsPileDeck">🗂️ PILE DECK (3+ folders/tabs → pinch-sweep to page)</label>
+      <input type="checkbox" id="gsPileDeck"></div>
     <div class="row"><label for="gsCornerMargin">rotate drag-cancel (px)</label>
       <input type="range" id="gsCornerMargin" min="200" max="2000" step="50">
       <span class="val" id="gsCornerMarginVal"></span></div>
@@ -547,7 +580,7 @@ setTimeout(function () {
      script below reaches its per-hand gesture loop. -->
 <script src="gestures.js"></script>
 <script type="module">
-import { HandLandmarker, FilesetResolver } from
+import { HandLandmarker, FaceDetector, FilesetResolver } from
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 
 // modes: ?mode=mirror (default, self-view) | overlay (transparent — OBS
@@ -664,6 +697,9 @@ const settingsHud = document.getElementById("settingsHud");
 const gsRockOn = document.getElementById("gsRockOn");
 const gsFingerGun = document.getElementById("gsFingerGun");
 const gsPeaceSign = document.getElementById("gsPeaceSign");
+const gsShush = document.getElementById("gsShush");
+const gsRps = document.getElementById("gsRps");
+const gsPileDeck = document.getElementById("gsPileDeck");
 const gsCornerMargin = document.getElementById("gsCornerMargin");
 const gsCornerMarginVal = document.getElementById("gsCornerMarginVal");
 const gsRotateLatchMs = document.getElementById("gsRotateLatchMs");
@@ -680,6 +716,9 @@ function syncGesturePanel() {
   gsRockOn.checked = !!g.rockOn;
   gsFingerGun.checked = !!g.fingerGun;
   gsPeaceSign.checked = !!g.peaceSign;
+  gsShush.checked = !!g.shush;
+  gsRps.checked = !!g.rps;
+  gsPileDeck.checked = !!g.pileDeck;
   gsCornerMargin.value = g.rotateDragCancelPx;
   gsCornerMarginVal.textContent = g.rotateDragCancelPx + "px";
   gsRotateLatchMs.value = g.rotateLatchMs;
@@ -709,6 +748,9 @@ document.getElementById("settingsSave").addEventListener("click", async () => {
     rockOn: gsRockOn.checked,
     fingerGun: gsFingerGun.checked,
     peaceSign: gsPeaceSign.checked,
+    shush: gsShush.checked,
+    rps: gsRps.checked,
+    pileDeck: gsPileDeck.checked,
     rotateDragCancelPx: Number(gsCornerMargin.value),
     rotateLatchMs: Number(gsRotateLatchMs.value),
     fingerGunCurl: Number(gsFingerGunCurl.value),
@@ -1030,6 +1072,20 @@ function updateFpsRecord(delegate, val) {
   }
 }
 let lastDetectAt = 0;   // watchdog: see the cam.currentTime stall note in frame() below
+
+// FACE DETECTOR (2026-09-03, Luis's call, for THE SHUSH gesture): a
+// SECOND MediaPipe model in the same tab is the exact pattern that
+// forced the body-outline segmenter out (GPU contention read as
+// whole-app choppiness -- see barehands.md "Known dead ends"). Kept
+// cheap on purpose: BlazeFace short-range (a bounding box + 6 keypoints,
+// ~1-2ms) NOT the 478-point FaceLandmarker, pinned to the CPU/WASM
+// delegate so it never touches HandLandmarker's GPU path, and only run
+// once every FACE_EVERY_MS since a mouth barely moves frame to frame.
+// mouthPt is normalized to the FULL cam frame (same space as a hand
+// landmark), null when no face is seen. Escalate to a Web Worker only if
+// this still stutters on a real phone.
+let faceDetector = null, lastFaceAt = 0, mouthPt = null, faceSpan = 0;
+const FACE_EVERY_MS = 200;
 
 // low-light assist: MediaPipe reads raw pixels, so a CSS filter on <video>
 // (display-only) does nothing for tracking — this actually redraws the
@@ -2152,6 +2208,7 @@ function ringToggle(ring) {
 // never a crash, just the same defaults the server would have sent.
 const DEFAULT_GESTURES = {
   rockOn: true, fingerGun: true, peaceSign: true,
+  shush: true, rps: true, pileDeck: true,
   rotateDragCancelPx: 800, rotateLatchMs: 2000, fingerGunCurl: 0.92,
 };
 let CFG = { name: "Assistant", orbs: [], gestures: { ...DEFAULT_GESTURES } };
@@ -3110,6 +3167,76 @@ function firePeaceSign() {
   toast("✌️✌️ YEAH!", 1400);
 }
 
+// THE SHUSH (2026-09-03, Luis's call): finger on the lips pauses Spotify
+// the instant it's confirmed. If nothing's playing the gesture is a
+// no-op -- "don't run the script" -- it just flashes a toast so you know
+// it registered. A second shush while paused-by-shush resumes. shushBusy
+// guards against a double-fire while the fetch round-trip is in flight.
+let shushHoldSince = 0, shushFired = false, shushedByUs = false, shushBusy = false;
+function fireShush() {
+  if (shushBusy) return;
+  shushBusy = true;
+  if (shushedByUs) {
+    // un-shush: resume whatever we paused
+    fetch("/spotify/resume", { method: "POST" })
+      .finally(() => { shushedByUs = false; shushBusy = false; });
+    toast("🔊 back on", 1200);
+    return;
+  }
+  fetch("/spotify/progress").then(r => r.json()).then(st => {
+    if (!st || !st.is_playing) { toast("🤫 (nothing playing)", 1100); shushBusy = false; return; }
+    return fetch("/spotify/pause", { method: "POST" })
+      .then(() => { shushedByUs = true; toast("🤫 quiet", 1400); })
+      .finally(() => { shushBusy = false; });
+  }).catch(() => { shushBusy = false; });
+}
+
+// ROCK PAPER SCISSORS vs Jarvis (2026-09-03, Luis's call): hold any of
+// the three throws ~700ms with nothing grabbed -> a 3-2-1 count, Jarvis
+// throws random, the compact #rpsHud shows both throws + the verdict +
+// a running score. ~2.6s cooldown, and the pose must be released before
+// the next round arms (rpsArmed) so one held hand can't chain rounds.
+const rpsHud = document.getElementById("rpsHud");
+const rpsCountEl = document.getElementById("rpsCount");
+const rpsThrowsEl = document.getElementById("rpsThrows");
+const rpsVerdictEl = document.getElementById("rpsVerdict");
+const rpsScoreEl = document.getElementById("rpsScore");
+const RPS_EMOJI = { rock: "✊", paper: "✋", scissors: "✌️" };
+let rpsPhase = "idle";            // idle | counting | cooldown
+let rpsHoldSince = 0, rpsArmed = true;
+let rpsScore = { you: 0, jarvis: 0 };
+let rpsTimers = [];
+function rpsScoreText() { return `YOU ${rpsScore.you} — ${rpsScore.jarvis} JARVIS`; }
+function startRpsRound(mine) {
+  rpsPhase = "counting";
+  rpsTimers.forEach(clearTimeout); rpsTimers = [];
+  rpsHud.classList.add("on");
+  rpsVerdictEl.textContent = ""; rpsVerdictEl.className = "verdict";
+  rpsThrowsEl.textContent = "";
+  rpsScoreEl.textContent = rpsScoreText();
+  const steps = ["3", "2", "1", "SHOOT"];
+  steps.forEach((s, i) =>
+    rpsTimers.push(setTimeout(() => { rpsCountEl.textContent = s; }, i * 500)));
+  rpsTimers.push(setTimeout(() => rpsResolve(mine), steps.length * 500));
+}
+function rpsResolve(mine) {
+  const theirs = ["rock", "paper", "scissors"][Math.floor(Math.random() * 3)];
+  const beats = { rock: "scissors", paper: "rock", scissors: "paper" };
+  rpsCountEl.textContent = "";
+  rpsThrowsEl.textContent = `${RPS_EMOJI[mine]}  vs  ${RPS_EMOJI[theirs]}`;
+  let v;
+  if (mine === theirs) { v = "tie"; rpsVerdictEl.textContent = "TIE"; }
+  else if (beats[mine] === theirs) { v = "win"; rpsScore.you++; rpsVerdictEl.textContent = "YOU WIN"; }
+  else { v = "lose"; rpsScore.jarvis++; rpsVerdictEl.textContent = "JARVIS WINS"; }
+  rpsVerdictEl.className = "verdict " + v;
+  rpsScoreEl.textContent = rpsScoreText();
+  rpsPhase = "cooldown";
+  rpsTimers.push(setTimeout(() => {
+    rpsHud.classList.remove("on");
+    rpsPhase = "idle";
+  }, 2600));
+}
+
 const clap = { hist: [] };            // inter-hand distance samples (v3)
 
 function getCursor(i) {
@@ -3892,6 +4019,65 @@ function physics(dt) {
   });
 }
 
+// THE PILE DECK (2026-09-03, Luis's call): once MORE THAN TWO folders
+// (panel) / tabs (browser) are open, they stop floating free and
+// collapse into a stacked deck -- one active on top, the rest fanned
+// behind, dimmed. A pinch + fast horizontal sweep pages the deck
+// (detected in the per-hand loop, sets pileStep): right-to-left = next,
+// left-to-right = previous, wrapping. Drops back below three open and
+// the deck dissolves, cards left where they sit. A card you physically
+// grab is skipped so you can still pull one out of the pile.
+let pileActive = false, pileIndex = 0, pileStep = 0;
+let pileX = 0, pileY = 0, pileSweptAt = 0;
+function pileMembers() {
+  return items
+    .filter(i => (i.type === "panel" || i.type === "browser") && i.el.isConnected)
+    .sort((a, b) => a.id - b.id);   // stable, creation-ordered paging
+}
+function updatePileDeck(dt) {
+  const deck = pileMembers();
+  if (!CFG.gestures.pileDeck || deck.length < 3) {
+    if (pileActive) {              // dissolve: hand the cards back
+      pileActive = false;
+      deck.forEach(c => { c.rz = 0; c.el.style.opacity = ""; c.pileZ = 0; });
+      items.filter(i => i.type === "panel" || i.type === "browser")
+        .forEach(c => { c.rz = 0; c.el.style.opacity = ""; });
+    }
+    pileStep = 0;
+    return;
+  }
+  if (!pileActive) {
+    pileActive = true;
+    pileIndex = 0;
+    // anchor at the centroid of whatever's open right now
+    pileX = deck.reduce((s, c) => s + c.x, 0) / deck.length;
+    pileY = deck.reduce((s, c) => s + c.y, 0) / deck.length;
+    pileX = Math.min(innerWidth - 260, Math.max(260, pileX));
+    pileY = Math.min(innerHeight - 220, Math.max(200, pileY));
+  }
+  if (pileStep) {
+    pileIndex = ((pileIndex + pileStep) % deck.length + deck.length) % deck.length;
+    pileStep = 0;
+  }
+  pileIndex = Math.min(pileIndex, deck.length - 1);
+  const k = Math.min(1, dt * 12);
+  deck.forEach((c, idx) => {
+    // leave alone: a pulled card, a flung one mid-flight, or one running
+    // its own materialize / spin / settle animation
+    if (c.grabbedBy.length || c.anim || c.flying || c.spinUntil || c.settleUntil) return;
+    const rel = idx - pileIndex;                // 0 = active, +/- = behind
+    const tx = pileX + rel * 30;
+    const ty = pileY + Math.abs(rel) * 10;
+    const tScale = rel === 0 ? 1 : 0.92;
+    c.x += (tx - c.x) * k;
+    c.y += (ty - c.y) * k;
+    c.scale += (tScale - (c.scale || 1)) * k;
+    c.rz = (c.rz || 0) + (rel * 0.05 - (c.rz || 0)) * k;
+    c.el.style.opacity = rel === 0 ? "1" : "0.45";
+    if (rel === 0 && c.el.parentNode) c.el.parentNode.appendChild(c.el);  // to front
+  });
+}
+
 // phantom-hand filter (a real-room catch: debug showed a hand with
 // none in frame — a busy background is full of hand-shaped clutter
 // and the 0.5 defaults hallucinate there; a ghost hand can grab items
@@ -3921,6 +4107,26 @@ async function createLandmarker(minDetectionConfidence, delegate) {
     // fresh DETECTION stays tighter (source-dependent) — the
     // busy-background ghost wall holds for local.
     minHandPresenceConfidence: 0.5 });
+}
+
+// THE SHUSH's mouth locator -- see the FACE DETECTOR note up top for why
+// this is deliberately the cheapest possible second model on the CPU
+// delegate. Failure to load is non-fatal: faceDetector stays null and
+// the shush gesture just never arms (the pose still no-ops silently).
+async function createFaceDetector() {
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    return await FaceDetector.createFromOptions(vision, {
+      baseOptions: { modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+        delegate: "CPU" },
+      runningMode: "VIDEO",
+      minDetectionConfidence: 0.5 });
+  } catch (e) {
+    console.warn("FaceDetector unavailable -- shush disabled", e);
+    return null;
+  }
 }
 
 // Live-swaps the active landmarker to a new confidence threshold (used
@@ -3958,6 +4164,8 @@ async function swapLandmarker(minDetectionConfidence, stillWanted, delegate = DE
 async function boot() {
   await pickInitialCam();
   landmarker = await createLandmarker(0.7, DELEGATE);
+  // fire-and-forget: hand tracking must not wait on the face model
+  createFaceDetector().then(fd => { faceDetector = fd; });
   recordArmAt = performance.now() + 1500;
   document.getElementById("boot").remove();
   await loadTree();
@@ -4027,6 +4235,41 @@ async function boot() {
           for (const lm of hand) { lm.x = lm.x * scaleX + offX; lm.y = lm.y * scaleY + offY; }
       }
       lastRes = res;
+
+      // THE SHUSH's mouth locator: throttled, CPU-delegate, best-effort.
+      // Runs on the SAME src frame the hand detector just used. Keypoint
+      // index 3 is BlazeFace's mouth centre; remapped through the same
+      // crop math as the hand landmarks above so mouthPt lands in
+      // full-frame normalized space. A throw here is swallowed -- a
+      // missed mouth read just means the shush can't arm this tick.
+      if (faceDetector && CFG.gestures.shush && now - lastFaceAt > FACE_EVERY_MS) {
+        lastFaceAt = now;
+        try {
+          const fres = faceDetector.detectForVideo(src, now);
+          const det = fres && fres.detections && fres.detections[0];
+          const kp = det && det.keypoints;
+          // BlazeFace keypoints (normalized [0,1]): 0 right eye, 1 left
+          // eye, 2 nose tip, 3 mouth centre, 4/5 ear tragions.
+          if (kp && kp[3]) {
+            let mx = kp[3].x, my = kp[3].y;
+            if (needsCrop && vw && vh) {
+              mx = mx * (cw / vw) + sx / vw;
+              my = my * (ch / vh) + sy / vh;
+            }
+            mouthPt = { x: mx, y: my };
+            // inter-eye distance, a clean normalized face-scale unit for
+            // the "fingertip near the mouth" radius downstream (also
+            // crop-remapped so it stays full-frame-normalized).
+            faceSpan = (kp[0] && kp[1])
+              ? Math.hypot(kp[0].x - kp[1].x, kp[0].y - kp[1].y) *
+                  (needsCrop && vw ? cw / vw : 1)
+              : 0.06;
+          } else {
+            mouthPt = null; faceSpan = 0;
+          }
+        } catch (e) { mouthPt = null; faceSpan = 0; }
+      }
+
       // smooth every tracked hand ONCE, up front -- both the debug
       // skeleton/ghost overlay AND the gesture loop below read this
       // same smoothed pass, never MediaPipe's raw per-frame guess.
@@ -4107,6 +4350,12 @@ async function boot() {
         cur.middleUpSign = middleUpSign(lms);
         cur.peaceSign = peaceSign(lms);
         cur.fingerGunSign = CFG.gestures.fingerGun && fingerGunSign(lms, CFG.gestures.fingerGunCurl);
+        cur.shushSign = shushSign(lms);
+        cur.fistSign = fistSign(lms);
+        cur.openPalmSign = openPalmSign(lms);
+        // index fingertip in full-frame normalized space (same space as
+        // mouthPt) -- THE SHUSH's proximity test reads this.
+        cur.idxTipN = { x: lms[8].x, y: lms[8].y };
         const holdingI = items.some(k => k.grabbedBy.includes(i));
         // GESTURE: FLICK — retuned 2026-08-25, third redesign (Luis's
         // call: trigger should be "click with thumb and pointer, snap
@@ -4390,6 +4639,33 @@ async function boot() {
           // RECORD take): this hand has nothing of its own to release --
           // `c` above came up empty. Its own pinch-then-snap instead
           cur.scrub = null;
+        }
+
+        // THE PILE DECK SWEEP: while a deck is up (3+ open folders/tabs),
+        // an empty pinch flicked fast sideways pages it. Checked BEFORE
+        // the explode scrub and it consumes the pinch (cur.scrub set to a
+        // dead slot) so the two can't both fire off one flick. Velocity
+        // from the last ~120ms of cursor history; MIR folds in the
+        // mirrored tracker so it reads in real-world terms -- real
+        // right-to-left = next, left-to-right = previous. Wraps.
+        if (pileActive && cur.pinched &&
+            !items.some(k => k.grabbedBy.includes(i)) &&
+            now - pileSweptAt > 500 && cur.history.length >= 3) {
+          const h = cur.history;
+          let old = h[0];
+          for (let z = h.length - 1; z >= 0; z--) {
+            if (now - h[z].t <= 120) old = h[z]; else break;
+          }
+          const span = h[h.length - 1].t - old.t;
+          const vx = span > 0 ? (h[h.length - 1].x - old.x) / span : 0;  // px/ms
+          if (Math.abs(vx) > 2.0) {
+            const MIR = -1;                      // real-right = tracked-left
+            const realDx = MIR * vx;
+            pileStep = realDx < 0 ? 1 : -1;      // real R->L (realDx<0) = next
+            pileSweptAt = now;
+            cur.scrub = { id: null };            // eat the pinch
+            toast(pileStep > 0 ? "▶ next" : "◀ previous", 700);
+          }
         }
 
         // THE EXPLODE SCRUB — hands drive it too, not just the
@@ -5013,6 +5289,51 @@ async function boot() {
         pointHoldSince = 0; pointFired = false;
       }
 
+      // THE SHUSH: one hand, index-alone pose, index fingertip actually
+      // near the FaceDetector's mouth keypoint (radius scales with the
+      // detected face), held ~250ms so a passing hand can't fire it.
+      // Latches until the pose breaks. mouthPt/faceSpan come from the
+      // throttled CPU-delegate face read in frame(); no face seen = no
+      // arm. All math is in full-frame normalized space (idxTipN,
+      // mouthPt), so it's mirror- and crop-agnostic.
+      const shushCand = CFG.gestures.shush && mouthPt && seenArr.length === 1 &&
+        cursors[seenArr[0]] && cursors[seenArr[0]].shushSign &&
+        cursors[seenArr[0]].idxTipN ? cursors[seenArr[0]] : null;
+      const nearMouth = shushCand &&
+        Math.hypot(shushCand.idxTipN.x - mouthPt.x,
+                   shushCand.idxTipN.y - mouthPt.y) < Math.max(faceSpan, 0.05) * 1.4;
+      if (nearMouth) {
+        if (!shushHoldSince) shushHoldSince = now;
+        if (!shushFired && now - shushHoldSince > 250) {
+          shushFired = true;
+          fireShush();
+        }
+      } else {
+        shushHoldSince = 0; shushFired = false;
+      }
+
+      // ROCK PAPER SCISSORS: one hand throwing fist / open palm / peace,
+      // nothing grabbed, held ~700ms -- only when a round isn't already
+      // running and the previous throw has been released (rpsArmed).
+      const rpsHand = CFG.gestures.rps && rpsPhase === "idle" &&
+        seenArr.length === 1 && !items.some(k => k.grabbedBy.length) &&
+        cursors[seenArr[0]] ? cursors[seenArr[0]] : null;
+      const rpsPose = rpsHand
+        ? (rpsHand.fistSign ? "rock"
+           : rpsHand.openPalmSign ? "paper"
+           : rpsHand.peaceSign ? "scissors" : null)
+        : null;
+      if (rpsPose && rpsArmed) {
+        if (!rpsHoldSince) rpsHoldSince = now;
+        if (now - rpsHoldSince > 700) {
+          rpsArmed = false; rpsHoldSince = 0;
+          startRpsRound(rpsPose);
+        }
+      } else {
+        rpsHoldSince = 0;
+        if (!rpsPose && rpsPhase === "idle") rpsArmed = true;
+      }
+
       // ---- GESTURE v3.9: THE DELIBERATE CLAP (Jared, after false
       // resets kept wiping his pinch tests: "that reset needs to be
       // more deliberate!"). Three locks on top of the speed signature:
@@ -5139,6 +5460,7 @@ async function boot() {
       }
     }
     physics(dt);
+    updatePileDeck(dt);       // 3+ open folders/tabs collapse into a deck
     renderModels();           // the 3D holograms draw their frames
     renderRings();            // the ring draws its frames (both pages)
     pushState(now);           // stream the scene to the OBS render page
