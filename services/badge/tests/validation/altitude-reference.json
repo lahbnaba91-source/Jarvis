@@ -1,0 +1,243 @@
+{
+  "referenceSet": "quinonez-2019-cari7a-altitude-polynomials",
+  "oracle": "CARI-7A (FAA CAMI), ICRP-103 effective dose rate as a function of flight level",
+  "citation": "F. Quinonez et al., 'Radiation Dose Charts for Long Geodetic and Polar Flights with CARI-7A', arXiv:1812.02073v3 (2019), Table 4 \u2014 the cosmic aeroradiation polynomials.",
+  "sourceUrl": "https://arxiv.org/abs/1812.02073",
+  "why": "The FL430 point set validates one altitude. These published fits give CARI-7A dose RATE across FL200-500 for each route, which tests the altitude dependence \u2014 the axis that dominates the whole error budget (brief \u00a73.3).",
+  "conditions": {
+    "dateUtc": "2018-03-01",
+    "quantity": "ICRP-103 effective dose rate, uSv/h, whole flight including climb and descent",
+    "shielding": "none \u2014 free-air phantom",
+    "zUnits": "flight level (hundreds of feet), so z=430 means FL430"
+  },
+  "validation": {
+    "method": "Each polynomial was evaluated at FL430 and compared against the same route's Table 5 dose rate, which is independently reported. Only fits agreeing within 5% are used.",
+    "rejected": {
+      "FAOR-KATL": "-305% against Table 5 \u2014 coefficient signs mangled in PDF extraction",
+      "KDFW-YSSY": "-260% against Table 5 \u2014 same",
+      "KIAH-YSSY": "-264% against Table 5 \u2014 same"
+    },
+    "acceptedAgreement": "the 13 retained fits sit between -4.8% and +0.8% of their Table 5 value, consistent with ordinary fit residual"
+  },
+  "flightLevels": [
+    280,
+    300,
+    320,
+    340,
+    360,
+    380,
+    400,
+    420,
+    440
+  ],
+  "routes": [
+    {
+      "id": "OTBD-KLAX",
+      "origin": "OTBD",
+      "destination": "KLAX",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": true,
+      "coefficients": {
+        "1": 0.002,
+        "3": 1.39e-07,
+        "5": -2.67e-13
+      }
+    },
+    {
+      "id": "OMAA-KLAX",
+      "origin": "OMAA",
+      "destination": "KLAX",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": true,
+      "coefficients": {
+        "1": 0.002,
+        "3": 1.38e-07,
+        "5": -2.67e-13
+      }
+    },
+    {
+      "id": "OMDB-KLAX",
+      "origin": "OMDB",
+      "destination": "KLAX",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": true,
+      "coefficients": {
+        "1": 0.002,
+        "3": 1.38e-07,
+        "5": -2.66e-13
+      }
+    },
+    {
+      "id": "OEJN-KLAX",
+      "origin": "OEJN",
+      "destination": "KLAX",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": true,
+      "coefficients": {
+        "0": 0.78,
+        "1": -0.0088,
+        "2": 4.18e-05,
+        "3": 1.26e-07,
+        "4": -2.06e-10
+      }
+    },
+    {
+      "id": "SCEL-YSSY",
+      "origin": "SCEL",
+      "destination": "YSSY",
+      "cruiseSpeedKmh": 913,
+      "climbRateFtPerMin": 2300,
+      "polar": true,
+      "coefficients": {
+        "0": 0.64,
+        "1": -0.0077,
+        "2": 4.06e-05,
+        "3": 1.19e-07,
+        "4": -2e-10
+      }
+    },
+    {
+      "id": "WSSS-KEWR",
+      "origin": "WSSS",
+      "destination": "KEWR",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": false,
+      "coefficients": {
+        "0": 0.56,
+        "1": -0.0068,
+        "2": 3.74e-05,
+        "3": 1.08e-07,
+        "4": -1.82e-10
+      }
+    },
+    {
+      "id": "KEWR-WSSS",
+      "origin": "KEWR",
+      "destination": "WSSS",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": false,
+      "coefficients": {
+        "0": 0.4,
+        "1": -0.0054,
+        "2": 3.49e-05,
+        "3": 9.7e-08,
+        "4": -1.69e-10
+      }
+    },
+    {
+      "id": "SAWG-SAWB",
+      "origin": "SAWG",
+      "destination": "SAWB",
+      "cruiseSpeedKmh": 540,
+      "climbRateFtPerMin": 1830,
+      "polar": true,
+      "coefficients": {
+        "0": 0.31,
+        "1": -0.0046,
+        "2": 3.51e-05,
+        "3": 9.3e-08,
+        "4": -1.73e-10
+      }
+    },
+    {
+      "id": "KLAX-WSSS",
+      "origin": "KLAX",
+      "destination": "WSSS",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": false,
+      "coefficients": {
+        "0": 1.15,
+        "1": -0.0174,
+        "2": 0.000105,
+        "3": -1.07e-07
+      }
+    },
+    {
+      "id": "YPPH-EGLL",
+      "origin": "YPPH",
+      "destination": "EGLL",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": false,
+      "coefficients": {
+        "0": 0.93,
+        "1": -0.0149,
+        "2": 9.4e-05,
+        "3": -9.8e-08
+      }
+    },
+    {
+      "id": "KSFO-WSSS",
+      "origin": "KSFO",
+      "destination": "WSSS",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": false,
+      "coefficients": {
+        "0": 0.77,
+        "1": -0.0132,
+        "2": 8.91e-05,
+        "3": -9.4e-08
+      }
+    },
+    {
+      "id": "NZAA-OTBD",
+      "origin": "NZAA",
+      "destination": "OTBD",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": false,
+      "coefficients": {
+        "0": 0.82,
+        "1": -0.0136,
+        "2": 8.97e-05,
+        "3": -9.4e-08
+      }
+    },
+    {
+      "id": "NZAA-OMDB",
+      "origin": "NZAA",
+      "destination": "OMDB",
+      "cruiseSpeedKmh": 907,
+      "climbRateFtPerMin": 2300,
+      "polar": false,
+      "coefficients": {
+        "0": 0.79,
+        "1": -0.0132,
+        "2": 8.81e-05,
+        "3": -9.3e-08
+      }
+    }
+  ],
+  "findings": {
+    "ranAt": "2026-09-02",
+    "points": 117,
+    "meanAbsDeviationPct": 11.3,
+    "within20Pct": "93 / 117",
+    "within30Pct": "114 / 117",
+    "polarMeanPct": -2.8,
+    "nonPolarMeanPct": -12.9,
+    "polarSignatureConfirmed": "The FL430 point set found polar -1.5% vs non-polar -13.9%. This independent altitude-resolved set reproduces it at -2.8% vs -12.9%, confirming the latitude-dependent disagreement is a real model difference and not an artifact of one altitude.",
+    "altitudeTrendPctPer100FL": 10.1,
+    "altitudeTrendMeaning": "BADGE runs about 17% low at FL280 and converges by FL440, and every one of the 13 routes shows the same slope. That is a genuine difference in altitude dependence, not an offset.",
+    "profileArtifactRuledOut": {
+      "method": "Dose rate computed at a single fixed point (60N) across FL280-FL440, with no climb, descent or profile involved at all, and compared against the published CARI-7A polynomial over the same span.",
+      "parmaDoublingFt": 9293,
+      "cari7aDoublingFt": 11468,
+      "conclusion": "PARMA's altitude dependence really is steeper than CARI-7A's, which is exactly the direction and rough magnitude of the observed trend. The synthetic climb/descent profile is not the cause."
+    },
+    "briefSection33": {
+      "claimedDoublingFt": 6000,
+      "parmaMeasuredFt": 9293,
+      "cari7aMeasuredFt": 11468,
+      "note": "Two independent dose models disagree with \u00a73.3 in the same direction. The brief's constant is 1.5x to 1.9x too steep depending on which model is asked, and PARMA's own sensitivity is not constant \u2014 it decays smoothly from x1.22 per 20 FL at FL280 to x1.11 at FL440."
+    }
+  }
+}
