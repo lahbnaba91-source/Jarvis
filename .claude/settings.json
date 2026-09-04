@@ -24,6 +24,14 @@
             "command": "python3 /workspaces/Jarvis/scripts/vault-audit/audit.py --quiet-if-clean || true"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /workspaces/Jarvis/scripts/session/guard.sh register || true"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

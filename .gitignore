@@ -47,6 +47,7 @@ jarvis-voice/jarvis_voice.egg-info/
 # both go stale the instant they're read on a different machine or session.
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.claude/sessions/
 
 # Compiled Python bytecode cache — regenerates automatically, never source.
 __pycache__/
