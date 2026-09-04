@@ -539,7 +539,7 @@ setTimeout(function () {
       <input type="checkbox" id="gsFingerGun"></div>
     <div class="row"><label for="gsPeaceSign">✌️ DOUBLE PEACE (Yeah!)</label>
       <input type="checkbox" id="gsPeaceSign"></div>
-    <div class="row"><label for="gsShush">🤫 SHUSH (finger on lips → pause Spotify)</label>
+    <div class="row"><label for="gsShush">🤫 SHUSH (finger on lips → pause Spotify) — loads a 2nd tracking model on SAVE, toggle off to save fps</label>
       <input type="checkbox" id="gsShush"></div>
     <div class="row"><label for="gsPileDeck">🗂️ PILE DECK (3+ folders/tabs → pinch-sweep to page)</label>
       <input type="checkbox" id="gsPileDeck"></div>
@@ -589,11 +589,12 @@ import { HandLandmarker, FaceDetector, FilesetResolver } from
 // the key — keying green ate the cursor on the first OBS test, 2026-08-07).
 // ?cam=<label substring> picks the tracking camera; C cycles cameras live.
 const Q = new URLSearchParams(location.search);
-// ?res=WxH — capture resolution (default 1920x1080, the tracking sweet
-// spot: MediaPipe downscales every frame to its model input anyway, so
-// higher res buys self-view sharpness, never accuracy — and costs fps
-// on weak machines; 1280x720 is the low-end saver, 3840x2160 the 4K
-// self-view). Capture res ≠ broadcast res: in an OBS rig the audience
+// ?res=WxH — capture resolution (default 1280x720, the low-end-safe
+// pick since 2026-09-04: MediaPipe downscales every frame to its model
+// input anyway, so higher res buys self-view sharpness, never accuracy,
+// and 1080p was costing real fps on weaker phones. ?res=1920x1080 gets
+// the old default back, 3840x2160 the 4K self-view). Capture res ≠
+// broadcast res: in an OBS rig the audience
 // sees OBS's own camera source; this only shapes the tracker's sensor.
 // ?portrait=1 — request the vertical capture instead of coercing the
 // camera into landscape (a camera flipped to portrait negotiates its
@@ -603,7 +604,7 @@ const Q = new URLSearchParams(location.search);
 const PORTRAIT = Q.get("portrait") === "1";
 const RES = (() => {
   const m = /^(\d{3,4})x(\d{3,4})$/i.exec(Q.get("res") || "");
-  return m ? [+m[1], +m[2]] : [1920, 1080];
+  return m ? [+m[1], +m[2]] : [1280, 720];
 })();
 let MODE = Q.get("mode") || "mirror";
 if (MODE === "greenkey") { MODE = "key"; Q.set("key", "green"); }   // back-compat
@@ -765,6 +766,18 @@ document.getElementById("settingsSave").addEventListener("click", async () => {
     fingerGunCurl: Number(gsFingerGunCurl.value),
   };
   CFG.gestures = { ...CFG.gestures, ...patch };
+  // the face model (FACE DETECTOR note, up near faceDetector's decl)
+  // loads/closes ONLY here, in lockstep with this checkbox -- never at
+  // boot, never just gated-but-resident. faceDetector's own null-ness is
+  // the source of truth (not "did shush change"), so this also covers
+  // the very first SAVE of a session where shush was already true from
+  // a prior config on disk but nothing has loaded yet.
+  if (patch.shush && !faceDetector) {
+    createFaceDetector().then(fd => { faceDetector = fd; });
+  } else if (!patch.shush && faceDetector) {
+    try { faceDetector.close(); } catch (e) {}
+    faceDetector = null; mouthPt = null; faceSpan = 0;
+  }
   settingsStatus.textContent = "saving…";
   try {
     const r = await fetch("/config", {
@@ -1091,8 +1104,11 @@ let lastDetectAt = 0;   // watchdog: see the cam.currentTime stall note in frame
 // delegate so it never touches HandLandmarker's GPU path, and only run
 // once every FACE_EVERY_MS since a mouth barely moves frame to frame.
 // mouthPt is normalized to the FULL cam frame (same space as a hand
-// landmark), null when no face is seen. Escalate to a Web Worker only if
-// this still stutters on a real phone.
+// landmark), null when no face is seen. It DID still stutter on a real
+// phone (2026-09-04, 12fps report) even at that cost, so it's no longer
+// created at boot -- it loads (and closes) only in lockstep with the
+// SHUSH toggle in Settings, see settingsSave below. Off by omission
+// costs nothing; on costs the ~1-2ms/200ms above, opted into on request.
 let faceDetector = null, lastFaceAt = 0, mouthPt = null, faceSpan = 0;
 const FACE_EVERY_MS = 200;
 
@@ -4173,10 +4189,33 @@ async function swapLandmarker(minDetectionConfidence, stillWanted, delegate = DE
 async function boot() {
   await pickInitialCam();
   landmarker = await createLandmarker(0.7, DELEGATE);
-  // fire-and-forget: hand tracking must not wait on the face model
-  createFaceDetector().then(fd => { faceDetector = fd; });
+  // the face model is NOT loaded here anymore -- see the FACE DETECTOR
+  // note up top; it only loads once the user opts in via the SHUSH
+  // toggle in Settings (settingsSave below)
   recordArmAt = performance.now() + 1500;
-  document.getElementById("boot").remove();
+  // TAP-TO-BEGIN GATE (2026-09-04, Luis's report -- "the gun/peace sfx
+  // don't play"): Chrome's autoplay policy blocks Audio().play() and
+  // AudioContext.resume() until the PAGE has seen a real user-activation
+  // event (click/touchstart/keydown) -- a hand gesture recognized off a
+  // video frame is not one, it's just JS reacting to pixels, so on a
+  // genuinely hands-free session (open the URL, never touch the screen
+  // or a key) sfxUnlocked (see _unlockSfxAudio above) never flips and
+  // every dun-dun/yeah plays silently, forever -- the toast still fires
+  // because .play().catch(()=>{}) swallows the rejection, so it LOOKED
+  // like it "used to work" purely by luck, whenever some incidental
+  // click (opening Settings, a debug hotkey) happened to land first.
+  // One mandatory tap on the loading screen now guarantees the unlock
+  // fires every session, not just the lucky ones -- tracking/camera
+  // init above is untouched and still fully automatic, only the reveal
+  // + audio-arm wait for it.
+  const bootEl = document.getElementById("boot");
+  bootEl.innerHTML = `TAP TO BEGIN<br><span style="color:#a8d8cf;font-size:12px">(also arms the gesture sound effects)</span>`;
+  await new Promise(resolve => {
+    const go = () => { _unlockSfxAudio(); _ac(); resolve(); };
+    bootEl.addEventListener("click", go, { once: true });
+    bootEl.addEventListener("touchstart", go, { once: true, passive: true });
+  });
+  bootEl.remove();
   await loadTree();
   spawnStage();
   toast("barehands v1.0", 2000);  // build fingerprint
@@ -5036,9 +5075,27 @@ async function boot() {
             // applyDepthPushPull's comment above.
             applyDepthPushPull(held, lms, now);
             const mp = Math.min((performance.now() - held.holdT) / CFG.gestures.rotateLatchMs, 1);
-            const dragDist = Math.hypot(cur.x - held.holdX, cur.y - held.holdY);
+            const dx = cur.x - held.holdX, dy = cur.y - held.holdY;
+            const dragDist = Math.hypot(dx, dy);
             const stillEnough = dragDist < CFG.gestures.rotateDragCancelPx;
             held.hch = stillEnough ? mp : 0;
+            // SWIPE FIX (2026-09-04, Luis's report -- "swipe up/down
+            // doesn't work, and letting go flings the panel off screen"):
+            // scroll used to be reachable ONLY once the full
+            // rotateLatchMs (2s default) had elapsed -- a real swipe is
+            // over in a few hundred ms, so it could never get here at
+            // all; it just stayed in quickmove (the window dragging with
+            // your hand) until release. That release then hit endGrab's
+            // fling-close check, whose "vertical release is just
+            // scrolling, don't close" exemption only applies in "scroll"
+            // mode -- never reached, so every energetic swipe read as a
+            // close-fling and yeeted the panel. A clearly VERTICAL drag
+            // (the scroll gesture) now promotes straight to scroll the
+            // moment it clears a small bar, no timer wait -- both bugs
+            // were the same gate. Horizontal/diagonal drags (repositioning
+            // the panel, Luis's 2026-08-26 ask) and hold-still -> rotate
+            // are untouched, still gated on mp>=1 same as before.
+            const verticalSwipe = Math.abs(dy) > 50 && Math.abs(dy) > Math.abs(dx) * 1.3;
             if (mp >= 1 && stillEnough) {
               held.mode = "rotate";
               held.rot0x = held.rx || 0; held.rot0y = held.ry || 0;
@@ -5046,7 +5103,7 @@ async function boot() {
               held.lastRotX = cur.x; held.lastRotY = cur.y;
               held.rvy = 0; held.hch = 0.6;
               toast("3D rotate — move your hand to turn it", 1400);
-            } else if (mp >= 1) {
+            } else if ((mp >= 1 && !stillEnough) || verticalSwipe) {
               held.mode = "scroll";
               held.scroll0 = held.scrollY || 0; held.grabY0 = cur.y;
               held.holdX = cur.x; held.holdY = cur.y; held.holdT = performance.now();
