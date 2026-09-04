@@ -1,4 +1,5 @@
 vendor/PARMA/route_dose
+vendor/PARMA/parma_reference
 vendor/PARMA/a.out
 tests/validation/last-run.json
 
