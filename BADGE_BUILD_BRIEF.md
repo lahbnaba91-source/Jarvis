@@ -147,24 +147,30 @@ ADS-B track (or fallback source)
 Every intermediate persists. Model version, solar params, and telemetry source stored per entry so
 the ledger can be fully recomputed later.
 
-### 3.3 The altitude sensitivity constant — memorize this
+### 3.3 The altitude sensitivity — memorize this
 
-Dose rate at cruise **roughly doubles for every 2,000 m (~6,000 ft)** of altitude. Consistently
-reported across sources; NAIRAS/ARMAS comparison work found GCR dose rate depends more strongly on
-altitude than on cutoff rigidity.
+Dose rate at cruise **roughly doubles for every ~2,900 m (~9,500 ft)** of altitude, measured against
+PARMA across FL280–FL440. CARI-7A gives ~11,500 ft over the same band; the true figure carries real
+model spread. It is **not a fixed constant** — the sensitivity flattens with altitude (steeper near
+FL280, shallower by FL440). Use ~9,500 ft for back-of-envelope work; `services/badge/tests/physics`
+measures the real per-altitude curve. NAIRAS/ARMAS comparison work found GCR dose rate depends more
+strongly on altitude than on cutoff rigidity.
 
 ```
-d(dose)/dose  =  ln(2) / 6000 ft  ×  Δaltitude_error
-              ≈  1.16 × 10⁻⁴ per foot
+d(dose)/dose  ≈  ln(2) / 9500 ft  ×  Δaltitude_error
+              ≈  7.3 × 10⁻⁵ per foot
 
-  100 ft error  ≈  1.2% dose error
-  500 ft error  ≈  5.9%
- 1000 ft error  ≈ 12.3%
- 2000 ft error  ≈ 26.0%
+  100 ft error  ≈  0.7% dose error
+  500 ft error  ≈  3.6%
+ 1000 ft error  ≈  7.3%
+ 2000 ft error  ≈ 14.6%
 ```
 
-**Altitude accuracy dominates the entire telemetry error budget.** Horizontal error of several
+**Altitude accuracy still dominates the entire telemetry error budget.** Horizontal error of several
 kilometres barely moves the answer. Design accordingly.
+
+*(An earlier draft of this brief said ~6,000 ft / 1.16×10⁻⁴ per foot — ~1.6× too steep. Corrected
+2026-09-04 against PARMA direct measurement and published CARI-7A.)*
 
 ---
 
@@ -274,14 +280,23 @@ corrected for actual local pressure. For true depth, correct each sample against
 pressure fields (GFS / ERA5) at that lat/lon/time. A genuine accuracy gain over every consumer tool
 in this space, and defensible under ISO 20785-4.
 
-**Use geometric altitude as a quality signal, not a correction.** Published analysis found barometric
-readings higher than geometric at cruise, absolute differences ranging 25 ft to 1,325 ft, averaging
-about 569 ft, with larger discrepancies during climb; a separate study found only 8.7% of altitude
-deviations fell within ICAO's 245 ft RVSM requirement. Large divergence flags possible altimetry
-system error on that airframe — record it as a data-quality note, never "average the two."
+**Use geometric altitude as a quality signal, not a correction.** Measured against 255 cruising
+aircraft over four continents (2026-09-02), barometric altitude ran consistently *higher* than
+geometric: always positive (0 of 255 negative), mean ~1,620 ft, median ~1,500 ft, range
+~650–2,775 ft, with strong regional clustering (Tokyo ~2,340 ft vs Sydney ~1,120 ft). This is the
+**atmosphere departing from the ISA standard** the pressure altimeter assumes — not altimetry system
+error — and it does **not** mean the dose is wrong, because dose depends on atmospheric depth, which
+is exactly what pressure altitude measures. Flag only the outliers: negative divergence is unusual,
+and divergence beyond ~3,500 ft is outside anything observed. Record those as data-quality notes,
+never "average the two." This measurement is evidence *for* preferring baro over GNSS, and it bears
+on the GFS/ERA5 correction idea above.
+
+*(An earlier draft cited 25–1,325 ft / ~569 ft average and framed large divergence as airframe
+altimetry error. Corrected 2026-09-04 against live ADS-B traffic — 67% of real aircraft exceed the
+old maximum, and the signature is ISA departure, not error.)*
 
 **Quantization:** geometric altitude updates less often than barometric (often every fourth record);
-readings round to 25 ft or 100 ft. Per §3.3 that is 0.3–1.2% dose error. Negligible.
+readings round to 25 ft or 100 ft. Per §3.3 that is under 1% dose error. Negligible.
 
 ### 6.3 ADS-B's real weakness: coverage fails where dose peaks
 
@@ -319,10 +334,13 @@ Failure mode A — vertical error, propagated through §3.3:
 
 | Source | Vertical error (est.) | Dose error |
 |---|---|---|
-| **ADS-B pressure altitude** | native depth measure; 25–100 ft quantization | **0.3 – 1.2%** |
-| Garmin, multi-band GNSS in cabin | ±150–300 ft | 1.7 – 3.5% |
-| Apple Watch Ultra (L1+L5) | ±200–350 ft | 2.3 – 4.1% |
-| Apple Watch Series (L1 only) | ±300–600 ft | 3.5 – 7.0% |
+| **ADS-B pressure altitude** | native depth measure; 25–100 ft quantization | **0.2 – 0.7%** |
+| Garmin, multi-band GNSS in cabin | ±150–300 ft | 1.1 – 2.2% |
+| Apple Watch Ultra (L1+L5) | ±200–350 ft | 1.5 – 2.6% |
+| Apple Watch Series (L1 only) | ±300–600 ft | 2.2 – 4.4% |
+
+*(Dose-error column recomputed 2026-09-04 against §3.3's corrected ~9,500 ft constant — every figure
+was ~1.5× too high in the earlier draft.)*
 
 **ADS-B is roughly an order of magnitude better than any wearable** on the dominant term. And on raw
 GNSS hardware, **Apple Watch Ultra is roughly comparable to Garmin** — the gap between them is not
@@ -349,6 +367,11 @@ Combined telemetry-induced dose uncertainty:
 
 \* assumes ground coverage. On oceanic/polar segments without ADS-C, ADS-B degrades to interpolated
 and is *worse* than a watch that held its recording — which is why cross-fill matters.
+
+*(The altitude-error term in this table was recomputed against §3.3's corrected ~9,500 ft constant
+2026-09-04; the coverage-loss term is unchanged. The combined figures above have not been
+individually re-derived — they remain P6-pending estimates, and the vertical-error ratios that drive
+the headline are unaffected.)*
 
 **Headline:** ADS-B carries ~3× lower dose uncertainty than the best wearable where coverage exists.
 Apple Watch carries ~30–50% higher uncertainty than Garmin on short/medium sectors, rising to 2–4× on
