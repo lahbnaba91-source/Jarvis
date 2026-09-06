@@ -1,19 +1,18 @@
-import { Button } from "@/components/ui/button"
+"use client"
+
+import dynamic from "next/dynamic"
+
+// Entirely client-rendered: it reads window.location for its initial view and
+// wraps CesiumJS, which needs the DOM. See components/site/site-page-client.tsx.
+const SitePageClient = dynamic(() => import("@/components/site/site-page-client"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-svh w-full items-center justify-center text-sm text-muted-foreground">
+      Loading Site Analyzer…
+    </div>
+  ),
+})
 
 export default function Page() {
-  return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
-        </div>
-      </div>
-    </div>
-  )
+  return <SitePageClient />
 }
