@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>barehands · dev dashboard</title>
+<!--
+  barehands DEV DASHBOARD — a second-device tuning cockpit.
+
+  Open this on a phone (built for an iPhone 13) while the board runs
+  somewhere else with ?dev=1 on its URL, e.g.
+     https://<forwarded-host>/stage.html?dev=1
+  Both devices just need to reach the same barehands server.
+
+  It is READ-MOSTLY: it polls /dev/telemetry ~11x/sec to draw the
+  skeleton on black and show how close every gesture trigger is to
+  firing, tails /dev/log, and the only thing it writes is gesture
+  thresholds — through the same /config endpoint the built-in settings
+  panel already uses. It never touches the board, the cards, or the
+  scene. Zero dependencies, same "nothing to install" rule as the rest
+  of the repo.
+-->
+<style>
+  :root{
+    --bg:#05070a; --panel:#0d1116; --panel2:#11171e; --line:#1d2732;
+    --ink:#dfe9ee; --dim:#7d8b95; --accent:#6fe5d6; --hot:#ff4646;
+    --warn:#ffb454; --ok:#57e08a;
+    --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overscroll-behavior:none}
+  body{padding:calc(var(--safe-t) + 6px) 10px calc(var(--safe-b) + 20px)}
+  h1{font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--dim);margin:2px 0 8px;font-weight:600}
+  .bar{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:9px 11px;margin-bottom:10px}
+  .bar b{color:var(--accent);font-variant-numeric:tabular-nums;font-weight:600}
+  .bar span{color:var(--dim);font-size:12px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+    background:var(--dim);margin-right:5px;vertical-align:1px}
+  .dot.live{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .dot.stale{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+  .dot.off{background:var(--hot);box-shadow:0 0 8px var(--hot)}
+  #wrap{position:relative;width:100%;aspect-ratio:4/3;background:#000;
+    border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  #skel{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #freeze{position:absolute;right:8px;top:8px;z-index:2;
+    background:rgba(13,17,22,.82);border:1px solid var(--line);color:var(--ink);
+    font-size:12px;padding:6px 12px;border-radius:8px}
+  #freeze.on{border-color:var(--accent);color:var(--accent)}
+  .hand{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:11px;margin-top:10px}
+  .hand h2{margin:0 0 8px;font-size:12px;letter-spacing:.1em;color:var(--dim);
+    text-transform:uppercase}
+  .metric{margin:7px 0}
+  .metric .lab{display:flex;justify-content:space-between;font-size:12px;
+    margin-bottom:3px}
+  .metric .lab i{font-style:normal;color:var(--dim)}
+  .metric .lab i.hit{color:var(--ok)}
+  .track{position:relative;height:12px;background:var(--panel2);
+    border-radius:6px;overflow:hidden}
+  .fill{position:absolute;left:0;top:0;bottom:0;background:var(--dim);
+    border-radius:6px}
+  .fill.hit{background:linear-gradient(90deg,#2f7d63,var(--accent))}
+  .mark{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--warn);
+    opacity:.9}
+  .mark.soft{background:#4a6270}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .chip{font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    padding:4px 8px;border-radius:999px;border:1px solid var(--line);
+    color:var(--dim);background:var(--panel2)}
+  .chip.on{color:#05201b;background:var(--accent);border-color:var(--accent);
+    font-weight:700}
+  details{background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;margin-top:10px;padding:2px 11px}
+  summary{padding:9px 0;font-size:12px;letter-spacing:.1em;color:var(--dim);
+    text-transform:uppercase;cursor:pointer}
+  .grp{margin:14px 0 2px;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--accent);font-weight:700}
+  .grp:first-of-type{margin-top:6px}
+  .grp span{color:var(--dim);font-weight:400;letter-spacing:0;
+    text-transform:none}
+  .set{display:grid;grid-template-columns:1fr auto;align-items:center;
+    column-gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+  .set label{font-size:13px}
+  .set label em{display:block;font-style:normal;font-size:11px;
+    color:var(--dim);margin-top:2px;line-height:1.35}
+  .set label .dfl{color:var(--dim);font-weight:600;font-size:11px}
+  .set label .dfl::before{content:"default "}
+  .set output{color:var(--accent);font-variant-numeric:tabular-nums;
+    min-width:56px;text-align:right;font-weight:600}
+  .set input[type=range]{grid-column:1/-1;width:100%;margin-top:6px;
+    accent-color:var(--accent)}
+  .set input[type=checkbox]{width:22px;height:22px;accent-color:var(--accent);
+    justify-self:end}
+  #t_reset{margin:12px 0 4px;width:100%;padding:9px;border-radius:8px;
+    background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+    font-size:12px}
+  #log{margin:8px 0 0;max-height:230px;overflow:auto;background:#000;
+    border:1px solid var(--line);border-radius:8px;padding:8px;
+    font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;color:#9fb4bd;
+    white-space:pre-wrap;word-break:break-word}
+  .save-note{font-size:11px;color:var(--dim);padding:6px 0 8px}
+  .save-note.ok{color:var(--ok)}
+  .save-note.err{color:var(--hot)}
+</style>
+</head>
+<body>
+<h1>barehands · dev dashboard</h1>
+
+<div class="bar">
+  <span><span id="conndot" class="dot"></span><b id="conn">…</b></span>
+  <span>fps <b id="fps">–</b></span>
+  <span>delegate <b id="delegate">–</b></span>
+  <span>smooth p50/p99 <b id="smooth">–</b> µs</span>
+  <span>coast <b id="coast">–</b>/s</span>
+  <span>hands <b id="nhands">0</b></span>
+</div>
+
+<div id="wrap">
+  <button id="freeze" type="button">freeze</button>
+  <canvas id="skel"></canvas>
+</div>
+
+<div id="hands"></div>
+
+<details id="tuning" open>
+  <summary>thresholds — live, writes to /config</summary>
+
+  <div class="grp">firing cuts <span>· the raw ratios every pose gate is built from (gestures.js)</span></div>
+  <div class="set"><label for="t_ext">extension cut <b class="dfl">1.45</b>
+    <em>tip/base wrist-ratio above which a digit reads “extended” — drives peace · middle · fist · open&nbsp;palm · shush · claw · finger-gun</em></label>
+    <input type="range" id="t_ext" min="1.15" max="1.90" step="0.01"><output id="o_ext">–</output></div>
+  <div class="set"><label for="t_rout">rock-on outer <b class="dfl">1.35</b>
+    <em>index &amp; pinky must exceed this</em></label>
+    <input type="range" id="t_rout" min="1.10" max="1.70" step="0.01"><output id="o_rout">–</output></div>
+  <div class="set"><label for="t_rin">rock-on inner <b class="dfl">1.15</b>
+    <em>middle &amp; ring must stay below this</em></label>
+    <input type="range" id="t_rin" min="0.85" max="1.45" step="0.01"><output id="o_rin">–</output></div>
+  <div class="set"><label for="t_fgc">finger-gun curl ceiling <b class="dfl">0.92</b>
+    <em>dun-dun’s other three fingers must curl tighter than this</em></label>
+    <input type="range" id="t_fgc" min="0.30" max="1.40" step="0.01"><output id="o_fgc">–</output></div>
+
+  <div class="grp">motion / timing</div>
+  <div class="set"><label for="t_latch">rotate latch <b class="dfl">2000ms</b>
+    <em>hold an item still this long to enter 3D-rotate</em></label>
+    <input type="range" id="t_latch" min="300" max="5000" step="50"><output id="o_latch">–</output></div>
+  <div class="set"><label for="t_drag">rotate drag-cancel <b class="dfl">800px</b>
+    <em>drag farther than this since the hold began = moving it, not rotating</em></label>
+    <input type="range" id="t_drag" min="200" max="3000" step="50"><output id="o_drag">–</output></div>
+
+  <div class="grp">on / off</div>
+  <div class="set"><label for="t_rock">rock-on → Spotify + light show</label><input type="checkbox" id="t_rock"></div>
+  <div class="set"><label for="t_fg">finger-gun (dun-dun) sting</label><input type="checkbox" id="t_fg"></div>
+  <div class="set"><label for="t_peace">double peace sign</label><input type="checkbox" id="t_peace"></div>
+  <div class="set"><label for="t_shush">shush → pause Spotify</label><input type="checkbox" id="t_shush"></div>
+  <div class="set"><label for="t_pile">pile deck (3+ folders)</label><input type="checkbox" id="t_pile"></div>
+
+  <button id="t_reset" type="button">reset all to shipped defaults</button>
+  <div class="save-note" id="savenote"></div>
+</details>
+
+<details id="logbox">
+  <summary>server log</summary>
+  <pre id="log">…</pre>
+</details>
+
+<script src="dev.js"></script>
+</body>
+</html>
