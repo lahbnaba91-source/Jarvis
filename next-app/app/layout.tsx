@@ -1,6 +1,10 @@
 import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
+// Cesium's widget CSS (measurement/info-box chrome). Cesium's JS runtime assets
+// (Workers/Assets/ThirdParty) are served separately from public/cesium — see
+// scripts/copy-cesium-assets.mjs and components/site/cesium-base-url.ts.
+import "cesium/Build/Cesium/Widgets/widgets.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils";
 
