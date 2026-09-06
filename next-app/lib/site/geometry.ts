@@ -1,6 +1,6 @@
 import * as turf from "@turf/turf"
 
-import type { LatLon, OverpassWay } from "./overpass"
+import type { CanopyArea, LatLon, OverpassWay } from "./overpass"
 
 export interface BuildingProfile {
   /** Footprint area in square meters. */
@@ -79,5 +79,112 @@ export function analyzeBuildingFootprint(way: OverpassWay): BuildingProfile | nu
     heightSource,
     addressLabel,
     centroid: { lat, lon },
+  }
+}
+
+const ROAD_CLASS_LABEL: Record<string, string> = {
+  motorway: "Motorway",
+  motorway_link: "Motorway ramp",
+  trunk: "Trunk road",
+  trunk_link: "Trunk ramp",
+  primary: "Primary road",
+  primary_link: "Primary ramp",
+  secondary: "Secondary road",
+  tertiary: "Tertiary road",
+  residential: "Residential street",
+  living_street: "Living street",
+  unclassified: "Minor road",
+  service: "Service road",
+  pedestrian: "Pedestrian way",
+  footway: "Footpath",
+  path: "Path",
+  steps: "Steps",
+  cycleway: "Cycleway",
+  track: "Track",
+}
+
+export function roadClassLabel(highway: string): string {
+  return ROAD_CLASS_LABEL[highway] ?? highway.replace(/_/g, " ")
+}
+
+export interface NearbyRoad {
+  name: string
+  classLabel: string
+  highway: string
+  distM: number
+  named: boolean
+}
+
+function minDistanceToPathMeters(center: LatLon, path: LatLon[]): number {
+  const from = turf.point([center.lon, center.lat])
+  let min = Infinity
+  if (path.length === 1) {
+    return turf.distance(from, turf.point([path[0].lon, path[0].lat]), { units: "meters" })
+  }
+  for (let i = 0; i < path.length - 1; i++) {
+    const seg = turf.lineString([
+      [path[i].lon, path[i].lat],
+      [path[i + 1].lon, path[i + 1].lat],
+    ])
+    const d = turf.pointToLineDistance(from, seg, { units: "meters" })
+    if (d < min) min = d
+  }
+  return min
+}
+
+/** Distinct roads near the site, closest first — named ways collapse to one
+ * entry, unnamed ways group by class so the list stays short. */
+export function summarizeRoads(roads: OverpassWay[], center: LatLon): NearbyRoad[] {
+  const byKey = new Map<string, NearbyRoad>()
+  for (const way of roads) {
+    const highway = way.tags.highway ?? "road"
+    const name = way.tags.name ?? way.tags.ref ?? ""
+    const key = name || `unnamed:${highway}`
+    const distM = minDistanceToPathMeters(center, way.geometry)
+    const existing = byKey.get(key)
+    if (existing) {
+      if (distM < existing.distM) existing.distM = distM
+      continue
+    }
+    byKey.set(key, {
+      name: name || `Unnamed ${roadClassLabel(highway).toLowerCase()}`,
+      classLabel: roadClassLabel(highway),
+      highway,
+      distM,
+      named: Boolean(name),
+    })
+  }
+  return [...byKey.values()].sort((a, b) => a.distM - b.distM)
+}
+
+export interface CanopySummary {
+  treeCount: number
+  treesTagged: number
+  canopyAreaM2: number
+  canopyPatches: number
+}
+
+export function summarizeCanopy(
+  trees: { heightSource: "tag" | "estimate" }[],
+  canopies: CanopyArea[],
+): CanopySummary {
+  let canopyAreaM2 = 0
+  for (const c of canopies) {
+    const coords: [number, number][] = c.geometry.map((p) => [p.lon, p.lat])
+    const first = coords[0]
+    const last = coords[coords.length - 1]
+    if (first[0] !== last[0] || first[1] !== last[1]) coords.push(first)
+    if (coords.length < 4) continue
+    try {
+      canopyAreaM2 += turf.area(turf.polygon([coords]))
+    } catch {
+      // Skip a self-intersecting or degenerate ring.
+    }
+  }
+  return {
+    treeCount: trees.length,
+    treesTagged: trees.filter((t) => t.heightSource === "tag").length,
+    canopyAreaM2,
+    canopyPatches: canopies.length,
   }
 }

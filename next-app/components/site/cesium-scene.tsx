@@ -5,7 +5,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 
 import { setCesiumBaseUrl } from "./cesium-base-url"
 
-import type { LatLon, OverpassWay } from "@/lib/site/overpass"
+import type { CanopyArea, LatLon, OverpassWay, TreePoint } from "@/lib/site/overpass"
 
 export interface CesiumSceneHandle {
   clearMeasurements: () => void
@@ -18,19 +18,121 @@ export interface CesiumSceneProps {
   target: LatLon | null
   date: Date
   roads: OverpassWay[]
+  /** Individually mapped trees, drawn as shadow-casting proxies. */
+  trees: TreePoint[]
+  /** Wooded / tree-row areas, drawn as low translucent canopy volumes. */
+  canopies: CanopyArea[]
   /** Footprint ring of the currently analyzed building, outlined on the ground. */
   buildingHighlight: LatLon[] | null
   measurementMode: boolean
   onMeasurement: (distanceMeters: number) => void
 }
 
+// OSM Buildings ships untextured. Colour the massing by use-type, with a
+// height gradient as the fallback, so a cityscape reads as varied 3D instead
+// of a field of identical grey blocks.
+const BUILDING_STYLE = new Cesium.Cesium3DTileStyle({
+  defines: { h: "${feature['cesium#estimatedHeight']}" },
+  color: {
+    conditions: [
+      [
+        "${feature['building']} === 'industrial' || ${feature['building']} === 'warehouse'",
+        "color('#a9aeb5')",
+      ],
+      [
+        "${feature['building']} === 'commercial' || ${feature['building']} === 'office'",
+        "color('#bfc7d1')",
+      ],
+      [
+        "${feature['building']} === 'retail' || ${feature['building']} === 'supermarket'",
+        "color('#cdbfa3')",
+      ],
+      ["${feature['building']} === 'hotel'", "color('#c9c0ac')"],
+      [
+        "${feature['building']} === 'church' || ${feature['building']} === 'cathedral' || ${feature['building']} === 'chapel'",
+        "color('#bdae93')",
+      ],
+      ["${h} >= 90", "color('#a6b0bd')"],
+      ["${h} >= 40", "color('#c3c9d1')"],
+      ["${h} >= 15", "color('#d0cec4')"],
+      ["true", "color('#d8d4c8')"],
+    ],
+  },
+})
+
+// Road centreline colour + draw width by OSM highway class, so the network
+// reads as a hierarchy instead of one flat colour.
+function roadStyle(highway: string): { color: Cesium.Color; width: number } {
+  switch (highway) {
+    case "motorway":
+    case "motorway_link":
+    case "trunk":
+    case "trunk_link":
+      return { color: Cesium.Color.fromCssColorString("#e8743b"), width: 6 }
+    case "primary":
+    case "primary_link":
+      return { color: Cesium.Color.fromCssColorString("#f0a83c"), width: 5 }
+    case "secondary":
+    case "secondary_link":
+      return { color: Cesium.Color.fromCssColorString("#f2cf4a"), width: 4.5 }
+    case "tertiary":
+    case "tertiary_link":
+      return { color: Cesium.Color.fromCssColorString("#f4e59c"), width: 4 }
+    case "residential":
+    case "unclassified":
+    case "living_street":
+      return { color: Cesium.Color.WHITE.withAlpha(0.9), width: 3.5 }
+    case "service":
+      return { color: Cesium.Color.fromCssColorString("#cfd4da").withAlpha(0.8), width: 2.5 }
+    case "footway":
+    case "path":
+    case "pedestrian":
+    case "steps":
+    case "track":
+      return { color: Cesium.Color.fromCssColorString("#8fd07a").withAlpha(0.85), width: 2 }
+    case "cycleway":
+      return { color: Cesium.Color.fromCssColorString("#6fb7ff").withAlpha(0.85), width: 2 }
+    default:
+      return { color: Cesium.Color.fromCssColorString("#e2e2e2").withAlpha(0.8), width: 3 }
+  }
+}
+
+// Entity count is the perf ceiling here: each tree is two primitives. Cap the
+// individually-drawn trees and lean on the canopy volumes for dense areas.
+const MAX_TREE_PROXIES = 350
+const CANOPY_HEIGHT_M = 10
+const TREE_CANOPY_COLOR = Cesium.Color.fromCssColorString("#5b8f4e")
+const TREE_TRUNK_COLOR = Cesium.Color.fromCssColorString("#6b4f36")
+const CANOPY_AREA_COLOR = Cesium.Color.fromCssColorString("#5b8f4e").withAlpha(0.55)
+
+// Cheap, GPU-side polish that makes untextured massing look shaded and
+// deliberate: multisampling plus ambient occlusion in the crevices. Every
+// step is individually guarded so a weak GPU/context can't blank the scene.
+function enhanceScene(viewer: Cesium.Viewer) {
+  try {
+    viewer.scene.msaaSamples = 4
+  } catch {
+    // Unsupported on this GPU/context — harmless.
+  }
+
+  try {
+    const ao = viewer.scene.postProcessStages.ambientOcclusion
+    ao.enabled = true
+    ao.uniforms.intensity = 2.2
+    ao.uniforms.bias = 0.12
+  } catch (err) {
+    console.warn("[site] ambient occlusion unavailable:", err)
+  }
+}
+
 const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function CesiumScene(
-  { ionToken, target, date, roads, buildingHighlight, measurementMode, onMeasurement },
+  { ionToken, target, date, roads, trees, canopies, buildingHighlight, measurementMode, onMeasurement },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const roadEntitiesRef = useRef<Cesium.Entity[]>([])
+  const treeEntitiesRef = useRef<Cesium.Entity[]>([])
   const highlightEntityRef = useRef<Cesium.Entity | null>(null)
   const measureEntitiesRef = useRef<Cesium.Entity[]>([])
   const pendingPointRef = useRef<Cesium.Cartesian3 | null>(null)
@@ -60,6 +162,9 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return
     let cancelled = false
+    // Held locally so cleanup can destroy the viewer even if teardown runs
+    // before init finished (React StrictMode double-mounts this effect in dev).
+    let localViewer: Cesium.Viewer | null = null
     setCesiumBaseUrl()
 
     async function init() {
@@ -87,6 +192,7 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
             ),
       })
 
+      localViewer = viewer
       if (cancelled) {
         viewer.destroy()
         return
@@ -107,10 +213,19 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
         try {
           const buildingsTileset = await Cesium.createOsmBuildingsAsync()
           if (cancelled) return
+          buildingsTileset.style = BUILDING_STYLE
           viewer.scene.primitives.add(buildingsTileset)
         } catch (err) {
           console.warn("[site] OSM Buildings tileset unavailable:", err)
         }
+      }
+
+      if (cancelled) return
+
+      try {
+        enhanceScene(viewer)
+      } catch (err) {
+        console.warn("[site] scene enhancement skipped:", err)
       }
 
       const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)
@@ -170,10 +285,12 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
 
     return () => {
       cancelled = true
-      if (viewerRef.current) {
-        viewerRef.current.destroy()
-        viewerRef.current = null
-      }
+      const viewer = viewerRef.current ?? localViewer
+      if (viewer && !viewer.isDestroyed()) viewer.destroy()
+      viewerRef.current = null
+      // Reset so the rebuilt viewer's setReady(true) re-fires the ready-gated
+      // effects below (flyTo, clock, roads, footprint highlight).
+      setReady(false)
     }
     // Re-initializing on token change is intentional: base imagery/terrain
     // are chosen at viewer construction time. Everything else (camera, clock,
@@ -212,20 +329,82 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
     const viewer = viewerRef.current
     if (!viewer) return
     for (const entity of roadEntitiesRef.current) viewer.entities.remove(entity)
-    roadEntitiesRef.current = roads.map((way) =>
-      viewer.entities.add({
+    roadEntitiesRef.current = roads.map((way) => {
+      const { color, width } = roadStyle(way.tags.highway ?? "road")
+      return viewer.entities.add({
+        name: way.tags.name ?? way.tags.ref ?? "",
         polyline: {
           positions: Cesium.Cartesian3.fromDegreesArray(
             way.geometry.flatMap((p) => [p.lon, p.lat]),
           ),
-          width: 4,
-          material: Cesium.Color.YELLOW.withAlpha(0.85),
+          width,
+          material: color,
           clampToGround: true,
         },
-      }),
-    )
-     
+      })
+    })
+
   }, [roads, ready])
+
+  // Mapped trees as shadow-casting proxies (canopy ellipsoid + trunk), plus
+  // wooded areas as low translucent canopy volumes so both block the sun.
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer) return
+    for (const entity of treeEntitiesRef.current) viewer.entities.remove(entity)
+    const added: Cesium.Entity[] = []
+
+    for (const canopy of canopies) {
+      if (canopy.geometry.length < 3) continue
+      added.push(
+        viewer.entities.add({
+          polygon: {
+            hierarchy: Cesium.Cartesian3.fromDegreesArray(
+              canopy.geometry.flatMap((p) => [p.lon, p.lat]),
+            ),
+            material: CANOPY_AREA_COLOR,
+            height: 0,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            extrudedHeight: CANOPY_HEIGHT_M,
+            extrudedHeightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            shadows: Cesium.ShadowMode.ENABLED,
+          },
+        }),
+      )
+    }
+
+    const shown = trees.length > MAX_TREE_PROXIES ? trees.slice(0, MAX_TREE_PROXIES) : trees
+    for (const tree of shown) {
+      const canopyR = Math.max(1.8, tree.heightM * 0.3)
+      added.push(
+        viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(tree.lon, tree.lat, tree.heightM * 0.55),
+          ellipsoid: {
+            radii: new Cesium.Cartesian3(canopyR, canopyR, canopyR * 1.15),
+            material: TREE_CANOPY_COLOR,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            shadows: Cesium.ShadowMode.ENABLED,
+          },
+        }),
+      )
+      added.push(
+        viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(tree.lon, tree.lat, tree.heightM * 0.2),
+          cylinder: {
+            length: tree.heightM * 0.4,
+            topRadius: Math.max(0.12, canopyR * 0.12),
+            bottomRadius: Math.max(0.15, canopyR * 0.15),
+            material: TREE_TRUNK_COLOR,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            shadows: Cesium.ShadowMode.ENABLED,
+          },
+        }),
+      )
+    }
+
+    treeEntitiesRef.current = added
+
+  }, [trees, canopies, ready])
 
   useEffect(() => {
     const viewer = viewerRef.current
