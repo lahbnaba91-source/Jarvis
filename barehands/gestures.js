@@ -13,6 +13,27 @@
 (function (root) {
   "use strict";
 
+  // TUNABLE CUTS (2026-09-06, the dev-dashboard build). These are the
+  // exact literals this file always used, lifted into one settable object
+  // so the live tuning dashboard can retune them through /config without
+  // an edit here. Defaults are unchanged, and the Node regression test
+  // never calls configureThresh(), so it always exercises these shipped
+  // values -- same guarantee the optional-param pattern (fingerGunSign's
+  // curlMax, clawPose's) already gives.
+  //   extend  -- tip-to-wrist / base-to-wrist ratio above which a digit
+  //              reads "extended". Drives extArr (peace / middle / fist /
+  //              open-palm / shush / claw / finger-gun) AND thumbExtended.
+  //   rockOut -- rockSign: index & pinky must exceed this.
+  //   rockIn  -- rockSign: middle & ring must sit below this.
+  const THRESH = { extend: 1.45, rockOut: 1.35, rockIn: 1.15 };
+  function configureThresh(patch) {
+    if (!patch) return THRESH;
+    if (typeof patch.extendCut === "number") THRESH.extend = patch.extendCut;
+    if (typeof patch.rockOutCut === "number") THRESH.rockOut = patch.rockOutCut;
+    if (typeof patch.rockInCut === "number") THRESH.rockIn = patch.rockInCut;
+    return THRESH;
+  }
+
   function hypot2(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
   // tip-to-wrist / base-to-wrist ratio, the convention every gate here
@@ -23,27 +44,28 @@
     return hypot2(lms[tip], W0) / (hypot2(lms[base], W0) || 1);
   }
 
-  // which of the 4 non-thumb fingers read "extended" (1.45x cut) --
-  // index, middle, ring, pinky, in that order. The base extArr every
-  // pose gate below composes from.
+  // which of the 4 non-thumb fingers read "extended" (THRESH.extend cut,
+  // default 1.45x) -- index, middle, ring, pinky, in that order. The base
+  // extArr every pose gate below composes from.
   function extArr(lms) {
     return [[8, 5], [12, 9], [16, 13], [20, 17]].map(([t, m]) =>
-      wristRatio(lms, t, m) > 1.45);
+      wristRatio(lms, t, m) > THRESH.extend);
   }
 
-  // thumb extended, 1.45x cut -- same formula as extArr's fingers, just
+  // thumb extended, same cut as extArr's fingers (THRESH.extend), just
   // CMC(2)->tip(4) instead of MCP->tip. Named thumbExt in stage.html's
   // claw section, thumbExtMid in its middleUp/fingerGun section -- same
   // math, one function here.
   function thumbExtended(lms) {
-    return wristRatio(lms, 4, 2) > 1.45;
+    return wristRatio(lms, 4, 2) > THRESH.extend;
   }
 
-  // ROCK ON: index + pinky extended (1.35x), middle + ring curled
-  // (1.15x) -- its own thresholds, independent of extArr on purpose.
+  // ROCK ON: index + pinky extended (THRESH.rockOut, default 1.35x),
+  // middle + ring curled (THRESH.rockIn, default 1.15x) -- its own
+  // thresholds, independent of extArr on purpose.
   function rockSign(lms) {
-    const out = (t, m) => wristRatio(lms, t, m) > 1.35;
-    const inn = (t, m) => wristRatio(lms, t, m) < 1.15;
+    const out = (t, m) => wristRatio(lms, t, m) > THRESH.rockOut;
+    const inn = (t, m) => wristRatio(lms, t, m) < THRESH.rockIn;
     return out(8, 5) && out(20, 17) && inn(12, 9) && inn(16, 13);
   }
 
@@ -145,6 +167,7 @@
     wristRatio, extArr, thumbExtended,
     rockSign, middleUpSign, peaceSign, shushSign, fistSign, openPalmSign,
     clawPose, snapPose, fingerGunSign,
+    THRESH, configureThresh,
   };
 
   if (typeof module !== "undefined" && module.exports) {

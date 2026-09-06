@@ -147,6 +147,15 @@ DEFAULT_GESTURES = {
                              # tight-fist fingers (mid-canyon cut between
                              # the charge pose's 1.16 floor and a real
                              # recorded dun-dun take's 0.57-0.67)
+    # gestures.js's THRESH.* -- the raw firing cuts every pose gate is
+    # built from, lifted here so the live dashboard can tune them. Shipped
+    # values, unchanged; gestures.js's configureThresh() only overrides a
+    # key when it arrives as a number.
+    "extendCut": 1.45,       # tip/base wrist-ratio above which a digit is
+                             # "extended" -- drives peace / middle finger /
+                             # fist / open palm / shush / claw / finger-gun
+    "rockOutCut": 1.35,      # rock-on: index & pinky must exceed this
+    "rockInCut": 1.15,       # rock-on: middle & ring must sit below this
 }
 _config_lock = threading.Lock()
 
@@ -497,6 +506,9 @@ GESTURE_FIELDS = {
     "rotateDragCancelPx": lambda v: clamp(v, 200, 3000, cast=int),
     "rotateLatchMs": lambda v: clamp(v, 300, 5000, cast=int),
     "fingerGunCurl": lambda v: clamp(v, 0.3, 1.4),
+    "extendCut": lambda v: clamp(v, 1.15, 1.9),
+    "rockOutCut": lambda v: clamp(v, 1.1, 1.7),
+    "rockInCut": lambda v: clamp(v, 0.85, 1.45),
 }
 
 
@@ -537,6 +549,12 @@ def orb_root(i):
 
 _STATE = b"{}"          # latest scene state: tracker POSTs, render GETs
 _CMDS = []              # queued board commands (your AI -> tracker)
+# DEV DASHBOARD: stage.html?dev=1 POSTs its smoothed landmarks + every
+# gesture-trigger number here ~11x/sec; dev.html on a second device GETs
+# it back to draw the skeleton and tuning bars. Latest-frame-only, in
+# memory, never persisted -- pure live mirror, lost on restart by design.
+_DEV_TELEMETRY = b"{}"
+_DEV_SEQ = 0            # bumped on every push; /dev/stream watches it
 _ALLOWED = ("add_img", "add_card", "clear", "reset", "hand", "give",
             "yank", "hover", "scroll_note", "widget", "explode", "assemble",
             "present")
@@ -557,10 +575,30 @@ class Handler(SimpleHTTPRequestHandler):
         # no-store on the pages themselves so a plain reload always serves
         # current code (Chrome/Safari happily cache through reloads
         # otherwise) -- a stale cached copy on a phone would silently miss
-        # fixes (this bit cam.html mid-testing, 2026-08-25).
-        if self.path.split("?")[0].endswith(("stage.html", "cam.html")):
+        # fixes (this bit cam.html mid-testing, 2026-08-25; and dev.html /
+        # dev.js are tuning tools you iterate on live, same deal).
+        if self.path.split("?")[0].endswith(
+                ("stage.html", "cam.html", "dev.html", "dev.js")):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
+
+    def guess_type(self, path):
+        # iOS Safari DOWNLOADS a page served as bare "text/html" when the
+        # response also carries "X-Content-Type-Options: nosniff" (which
+        # the Codespaces forwarding proxy always adds) -- it renders only
+        # once the charset is spelled out. Python's mimetypes never adds
+        # one, so force it for the text types we actually serve here.
+        # (Live 2026-09-06: dev.html downloaded instead of opening on a
+        # phone until this was in place.)
+        t = super().guess_type(path)
+        p = str(path).split("?")[0].lower()
+        if p.endswith((".html", ".htm")):
+            return "text/html; charset=utf-8"
+        if p.endswith(".js") or p.endswith(".mjs"):
+            return "text/javascript; charset=utf-8"
+        if p.endswith(".css"):
+            return "text/css; charset=utf-8"
+        return t
 
     def __init__(self, *a, **k):
         super().__init__(*a, directory=str(HERE), **k)
@@ -601,7 +639,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        global _STATE
+        global _STATE, _DEV_TELEMETRY, _DEV_SEQ
         n = int(self.headers.get("Content-Length", 0) or 0)
         # 262144 (256KB) was fine for every other POST body here (all tiny
         # command/state objects) but silently ate real /gesture/record
@@ -645,6 +683,16 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(out)))
             self.end_headers()
             self.wfile.write(out)
+            return
+        if self.path == "/dev/telemetry":
+            # stage.html?dev=1 heartbeat -- just hold the latest body,
+            # verbatim, for dev.html to GET back / stream out. No parsing,
+            # no validation: it never touches the board or persisted state.
+            _DEV_TELEMETRY = body
+            _DEV_SEQ += 1
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
             return
         if self.path == "/light/toggle":
             result, code = hubspace_call("toggle")
@@ -868,7 +916,10 @@ class Handler(SimpleHTTPRequestHandler):
                         "orbs": [{"title": o.get("title", "?"),
                                   "kind": o.get("kind", "notes")}
                                  for o in CONFIG["orbs"]],
-                        "gestures": CONFIG.get("gestures", DEFAULT_GESTURES)})
+                        # merge so a config saved before a new THRESH key
+                        # existed still reports the full, current set
+                        "gestures": {**DEFAULT_GESTURES,
+                                     **CONFIG.get("gestures", {})}})
             return
         if self.path.startswith("/tree"):
             # a notes orb's folder tree. Jailed to that orb's configured
@@ -1007,6 +1058,91 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(_STATE)
+            return
+        if self.path in ("/dev", "/dev/", "/dev/dashboard"):
+            # serve the dashboard at an EXTENSION-LESS url. iOS Safari /
+            # Chrome will download a ".html" link as a document in some
+            # contexts (opened from another app, or once it has decided
+            # the url is a file) no matter the Content-Type; a path with
+            # no ".html" on it sidesteps that entirely. Content-Disposition
+            # inline is stated outright here too. dev.html's <script
+            # src="dev.js"> still resolves (sibling of /dev).
+            try:
+                html = (HERE / "dev.html").read_bytes()
+            except Exception as e:
+                self._json({"error": f"dev.html unreadable: {e}"}, 500)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("Content-Length", str(len(html)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(html)
+            return
+        if self.path == "/dev/telemetry":
+            # single-shot: the latest frame (dev.html's polling fallback).
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(_DEV_TELEMETRY)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(_DEV_TELEMETRY)
+            return
+        if self.path == "/dev/stream":
+            # Server-Sent Events: push each new telemetry frame the moment
+            # it lands, so the dashboard isn't paying a request round-trip
+            # per frame through the tunnel. One thread per connection
+            # (ThreadingHTTPServer); Connection: close so there's no
+            # keep-alive framing to get wrong. Ends when the client goes
+            # away (write raises) -- EventSource reconnects on its own.
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+            last = None
+            quiet = 0
+            try:
+                self.wfile.write(b"retry: 2000\n\n")
+                self.wfile.flush()
+                while True:
+                    if _DEV_SEQ != last:
+                        last = _DEV_SEQ
+                        quiet = 0
+                        self.wfile.write(b"data: " + _DEV_TELEMETRY + b"\n\n")
+                        self.wfile.flush()
+                    else:
+                        quiet += 1
+                        if quiet >= 400:      # ~12s idle -> keep-alive ping
+                            quiet = 0
+                            self.wfile.write(b": ping\n\n")
+                            self.wfile.flush()
+                    time.sleep(0.03)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            return
+        if self.path.startswith("/dev/log"):
+            # last N lines of the dev server's own log (HERE/server.log,
+            # where the launcher redirects stdout+stderr) for the phone
+            # dashboard's log pane. n capped so a huge log can't wedge it.
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                n = max(1, min(500, int((q.get("n") or ["200"])[0])))
+            except ValueError:
+                n = 200
+            log_path = HERE / "server.log"
+            lines = []
+            try:
+                with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                    lines = f.read().splitlines()[-n:]
+            except FileNotFoundError:
+                lines = ["(no server.log — start the server with output "
+                         "redirected there, e.g. python3 server.py > server.log 2>&1)"]
+            except Exception as e:
+                lines = [f"(log read error: {e})"]
+            self._json({"lines": lines})
             return
         if not self.path.startswith("/note?"):
             return super().do_GET()
