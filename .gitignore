@@ -52,6 +52,12 @@ jarvis-voice/jarvis_voice.egg-info/
 # Compiled Python bytecode cache — regenerates automatically, never source.
 __pycache__/
 
+# Dev-server runtime logs — ai-visualizer / barehands / jarvis-voice each
+# write a server.log when launched (start-all.sh or by hand), jarvis-voice
+# also a uv-sync.log. Pure runtime output, rewritten every start, never
+# source. No .log file is tracked anywhere in this repo.
+*.log
+
 .DS_Store
 
 # pull-hq-vault.py's own hidden baseline clone -- a change-detection sensor,
