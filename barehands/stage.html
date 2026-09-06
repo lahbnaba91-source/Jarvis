@@ -626,6 +626,13 @@ if (MODE === "key") {
   document.body.style.background = color;
   if (want === "green") document.body.classList.add("ui-cyan");
 }
+// ?dev=1 — arm the DEV DASHBOARD telemetry feed (see pushDevTelemetry
+// near pushState). OFF by default: with the flag absent NOTHING below
+// changes -- no landmark stash, no /dev/telemetry POST, no /config
+// re-poll. It only exists so a second device (dev.html on a phone) can
+// watch this page's smoothed landmarks and every number the gesture
+// detectors gate on, live, for tuning.
+const DEV_ON = Q.get("dev") === "1";
 
 const cam = document.getElementById("cam");
 const BEHIND = document.getElementById("behind");
@@ -711,10 +718,12 @@ delegateBtn.addEventListener("click", async () => {
 // along its last trajectory and decelerates as covariance grows
 // instead of stopping dead. One Euro still does all steady-state
 // smoothing either way -- this only changes what feeds it DURING a
-// dropout. Session-local, not persisted; ?coast=1 boots it on. The
-// debug panel shows both paths' per-frame cost live for A/B.
+// dropout. Session-local, not persisted. ON by default (2026-09-06,
+// Luis: "running pretty smooth now") -- ?coast=0 forces it off, the
+// COAST button still toggles it live. The debug panel shows both
+// paths' per-frame cost for A/B.
 const coastBtn = document.getElementById("coastBtn");
-let COAST_ON = Q.get("coast") === "1";
+let COAST_ON = Q.get("coast") !== "0";
 coastBtn.classList.toggle("on", COAST_ON);
 coastBtn.addEventListener("click", () => {
   COAST_ON = !COAST_ON;
@@ -791,6 +800,7 @@ document.getElementById("settingsSave").addEventListener("click", async () => {
     fingerGunCurl: Number(gsFingerGunCurl.value),
   };
   CFG.gestures = { ...CFG.gestures, ...patch };
+  if (window.configureThresh) window.configureThresh(CFG.gestures);
   // the face model (FACE DETECTOR note, up near faceDetector's decl)
   // loads/closes ONLY here, in lockstep with this checkbox -- never at
   // boot, never just gated-but-resident. faceDetector's own null-ness is
@@ -813,6 +823,7 @@ document.getElementById("settingsSave").addEventListener("click", async () => {
     if (r.ok) {
       const j = await r.json();
       CFG.gestures = j.gestures;
+      if (window.configureThresh) window.configureThresh(CFG.gestures);
       syncGesturePanel();
       settingsStatus.textContent = "saved";
       setTimeout(() => { settingsHud.style.display = "none"; }, 500);
@@ -2260,6 +2271,11 @@ const DEFAULT_GESTURES = {
   rockOn: true, fingerGun: true, peaceSign: true,
   shush: true, pileDeck: true,
   rotateDragCancelPx: 800, rotateLatchMs: 2000, fingerGunCurl: 0.92,
+  // gestures.js THRESH.* — mirrored here so CFG.gestures always carries
+  // them (the dev dashboard reads them straight off the telemetry) and
+  // configureThresh() below has a full set to apply. Keep in sync with
+  // server.py's DEFAULT_GESTURES and gestures.js's THRESH.
+  extendCut: 1.45, rockOutCut: 1.35, rockInCut: 1.15,
 };
 let CFG = { name: "Assistant", orbs: [], gestures: { ...DEFAULT_GESTURES } };
 let TREES = [], PROPSTREE = null;
@@ -2272,6 +2288,7 @@ async function loadTree() {
     if (r.ok) {
       CFG = await r.json();
       CFG.gestures = { ...DEFAULT_GESTURES, ...(CFG.gestures || {}) };
+      if (window.configureThresh) window.configureThresh(CFG.gestures);
       syncGesturePanel();
     }
   } catch (e) {}
@@ -4443,6 +4460,11 @@ async function boot() {
           cur.el.classList.remove("lost");
         }
         const lms = smHands[i];   // already smoothed in the pre-pass above
+        if (DEV_ON) {   // dev-dashboard telemetry reads these
+          cur.smLms = lms;
+          const _hd = res.handednesses && res.handednesses[i] && res.handednesses[i][0];
+          cur.devHand = _hd ? _hd.categoryName : null;
+        }
         const tip = toScreen(lms[8]), thumb = toScreen(lms[4]);
         const span = Math.hypot(lms[0].x - lms[9].x, lms[0].y - lms[9].y);
         // v3.9.3: palm-axis upness (1 = fingers straight up) — the clap
@@ -4468,9 +4490,13 @@ async function boot() {
         // three readable. Fresh grabs demand a non-fist; a hand
         // already HOLDING is exempt (the force-pull carry is a fist).
         const W0 = lms[0];
+        // extension cut: same THRESH.extend gestures.js uses (default
+        // 1.45), so the live dashboard's slider retunes this inline copy
+        // too, not just the pure-function gates.
+        const _extCut = (window.THRESH && window.THRESH.extend) || 1.45;
         const extArr = [[8, 5], [12, 9], [16, 13], [20, 17]].map(([t, m]) =>
           Math.hypot(lms[t].x - W0.x, lms[t].y - W0.y) >
-          1.45 * Math.hypot(lms[m].x - W0.x, lms[m].y - W0.y));
+          _extCut * Math.hypot(lms[m].x - W0.x, lms[m].y - W0.y));
         const extFingers = extArr.filter(Boolean).length;
         // 2026-08-27: ROCK ON / MIDDLE FINGER UP / PEACE SIGN / FINGER GUN
         // all moved to gestures.js (pure functions, zero DOM dependency)
@@ -5624,6 +5650,7 @@ async function boot() {
     renderModels();           // the 3D holograms draw their frames
     renderRings();            // the ring draws its frames (both pages)
     pushState(now);           // stream the scene to the OBS render page
+    if (DEV_ON) pushDevTelemetry(now);   // ?dev=1 only — see below
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -5694,6 +5721,71 @@ function pushState(now) {
   };
   fetch("/state", { method: "POST", body: JSON.stringify(st) })
     .then(r => r.json()).then(applyCmds).catch(() => {});
+}
+
+// ---- DEV DASHBOARD telemetry (only reached when DEV_ON, i.e. ?dev=1).
+// Ships the smoothed landmarks plus every number the gesture detectors
+// actually gate on -- the four finger wrist-ratios + thumb, the pinch
+// gap/span, the 1.45x extension bits, handUp, and which detectors are
+// firing this frame -- to /dev/telemetry ~11x/sec. The dev.html page on
+// a second device (a phone) polls that back to draw the skeleton on
+// black and show how close each trigger is to its threshold, live,
+// while you throw a pose. Also re-polls /config ~1x/sec so a threshold
+// slider dragged on that page takes effect here without a reload. The
+// wrist-ratio math is duplicated from gestures.js's wristRatio on
+// purpose: this file can't import it (loaded as a plain global), and a
+// read-only telemetry mirror must never risk perturbing the live
+// detectors by sharing mutable state with them.
+let lastDevPush = 0, lastDevCfg = 0;
+function pushDevTelemetry(now) {
+  if (now - lastDevPush < 90) return;   // ~11Hz
+  lastDevPush = now;
+  if (now - lastDevCfg > 1000) {        // pull dashboard threshold edits
+    lastDevCfg = now;
+    fetch("/config", { cache: "no-store" }).then(r => r.json())
+      .then(j => { if (j && j.gestures) {
+        CFG.gestures = { ...DEFAULT_GESTURES, ...j.gestures };
+        if (window.configureThresh) window.configureThresh(CFG.gestures);
+      } })
+      .catch(() => {});
+  }
+  const wr = (lms, t, b) => { const W = lms[0];
+    return Math.hypot(lms[t].x - W.x, lms[t].y - W.y) /
+           (Math.hypot(lms[b].x - W.x, lms[b].y - W.y) || 1); };
+  const hands = Object.keys(cursors).sort().map(k => {
+    const c = cursors[k], lms = c.smLms;
+    if (!lms) return null;
+    return {
+      lms: lms.map(p => [+p.x.toFixed(4), +p.y.toFixed(4), +(p.z || 0).toFixed(4)]),
+      wr: { idx: +wr(lms, 8, 5).toFixed(3), mid: +wr(lms, 12, 9).toFixed(3),
+            ring: +wr(lms, 16, 13).toFixed(3), pinky: +wr(lms, 20, 17).toFixed(3),
+            thumb: +wr(lms, 4, 2).toFixed(3) },
+      gap: +Math.hypot(lms[4].x - lms[8].x, lms[4].y - lms[8].y).toFixed(4),
+      span: +Math.hypot(lms[0].x - lms[9].x, lms[0].y - lms[9].y).toFixed(4),
+      ext: [[8, 5], [12, 9], [16, 13], [20, 17]].map(([t, b]) => wr(lms, t, b) > 1.45 ? 1 : 0),
+      handUp: +(c.handUp || 0).toFixed(3),
+      hand: c.devHand || null,
+      fired: { pinched: c.pinched ? 1 : 0, rock: c.rockSign ? 1 : 0,
+        middle: c.middleUpSign ? 1 : 0, peace: c.peaceSign ? 1 : 0,
+        shush: c.shushSign ? 1 : 0, fist: c.fistSign ? 1 : 0,
+        palm: c.openPalmSign ? 1 : 0, fingerGun: c.fingerGunSign ? 1 : 0,
+        claw: (typeof clawPose === "function" && clawPose(lms)) ? 1 : 0,
+        snap: (typeof snapPose === "function" && snapPose(lms)) ? 1 : 0 },
+    };
+  }).filter(Boolean);
+  // _smRing stores values already in microseconds and exposes its own
+  // percentile helper (same one the debug HUD reads).
+  fetch("/dev/telemetry", { method: "POST", body: JSON.stringify({
+    t: Math.round(now), fps, delegate: DELEGATE,
+    smoothP50: +_smRing.pct(0.5).toFixed(1),
+    smoothP99: +_smRing.pct(0.99).toFixed(1),
+    coastRate: _coastRate,
+    // capture aspect (w/h) so the dashboard can cover-fit the skeleton
+    // exactly the way stage.html's toScreen() does, mirror flip and all.
+    aspect: (cam && cam.videoWidth && cam.videoHeight)
+      ? +(cam.videoWidth / cam.videoHeight).toFixed(4) : 1.7778,
+    gestures: CFG.gestures, hands,
+  }) }).catch(() => {});
 }
 
 // (an earlier whole-screen voice-pulse aura was removed — THE RING
