@@ -293,13 +293,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   #topDockPill.open #topDockRow button { opacity:1; transform:scale(1);
                                           filter:blur(0); transition-delay:0.2s; }
   #skelBtn, #darkBtn, #recBtn, #camBtn, #trackBtn, #settingsBtn,
-  #calBtn, #delegateBtn, #gameBtn {
+  #calBtn, #delegateBtn, #coastBtn, #gameBtn {
     background:rgba(0,0,0,0.65); color:rgba(230,255,240,0.75);
     border:1px solid rgba(140,240,225,0.35); border-radius:8px;
     padding:7px 12px; font:12px "SF Mono",Menlo,monospace;
     letter-spacing:0.06em; cursor:pointer; flex:0 0 auto; }
   #skelBtn.on, #darkBtn.on, #camBtn.on, #trackBtn.on, #delegateBtn.on,
-  #gameBtn.on {
+  #coastBtn.on, #gameBtn.on {
     color:#8ff0e4; border-color:rgba(140,240,225,0.75);
     box-shadow:0 0 12px rgba(111,229,214,0.35); }
   #recBtn.rec { color:#ff8a8a; border-color:rgba(255,110,110,0.8);
@@ -507,7 +507,7 @@ setTimeout(function () {
 <div id="topDockPill">
 <div id="topDockInner">
 <div id="topDockRow">
-<button id="skelBtn" type="button">SKELETON</button><button id="darkBtn" type="button">DARK</button><button id="recBtn" type="button">RECORD</button><button id="camBtn" type="button">CAM</button><button id="trackBtn" type="button">TRACK</button><button id="settingsBtn" type="button">SETTINGS</button><button id="calBtn" type="button">CALIBRATE</button><button id="delegateBtn" type="button">GPU</button><button id="gameBtn" type="button">GAME</button>
+<button id="skelBtn" type="button">SKELETON</button><button id="darkBtn" type="button">DARK</button><button id="recBtn" type="button">RECORD</button><button id="camBtn" type="button">CAM</button><button id="trackBtn" type="button">TRACK</button><button id="settingsBtn" type="button">SETTINGS</button><button id="calBtn" type="button">CALIBRATE</button><button id="delegateBtn" type="button">GPU</button><button id="coastBtn" type="button">COAST</button><button id="gameBtn" type="button">GAME</button>
 </div>
 </div>
 </div>
@@ -578,6 +578,11 @@ setTimeout(function () {
      (rockSign, clawPose, etc.) are plain globals by the time the module
      script below reaches its per-hand gesture loop. -->
 <script src="gestures.js"></script>
+<!-- 2026-09-05: predict-through-dropout Kalman filter for occluded
+     landmarks, shared verbatim with test/test-smoothing.js under Node --
+     see smoothing.js. Classic script, same as gestures.js above, so
+     SMOOTHING is a plain global by the time the module below runs. -->
+<script src="smoothing.js"></script>
 <script type="module">
 import { HandLandmarker, FaceDetector, FilesetResolver } from
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
@@ -696,6 +701,26 @@ delegateBtn.addEventListener("click", async () => {
   toast(landmarkerSwapErr
     ? `${next} unavailable: ${landmarkerSwapErr}`
     : `hand tracking: ${DELEGATE}`, 1800);
+});
+
+// COAST toggle (2026-09-05, Luis's ask): predict-through-dropout for
+// occluded landmarks. OFF = the old behaviour -- an occluded point is
+// FROZEN at its last position for up to LM_STUCK_MAX frames (see
+// smoothLandmarks). ON = that point is instead handed the constant
+// -velocity Kalman prediction from smoothing.js, so it keeps gliding
+// along its last trajectory and decelerates as covariance grows
+// instead of stopping dead. One Euro still does all steady-state
+// smoothing either way -- this only changes what feeds it DURING a
+// dropout. Session-local, not persisted; ?coast=1 boots it on. The
+// debug panel shows both paths' per-frame cost live for A/B.
+const coastBtn = document.getElementById("coastBtn");
+let COAST_ON = Q.get("coast") === "1";
+coastBtn.classList.toggle("on", COAST_ON);
+coastBtn.addEventListener("click", () => {
+  COAST_ON = !COAST_ON;
+  coastBtn.classList.toggle("on", COAST_ON);
+  toast(COAST_ON ? "coast: occluded fingers predict through dropout"
+                 : "coast off: occluded fingers hold (original)", 1600);
 });
 
 // GESTURE SETTINGS PANEL (2026-08-27): the actual customization UI --
@@ -3406,34 +3431,90 @@ const LM_STUCK_MAX = 3;     // consecutive frames a landmark may be held
                             // before the ceiling gives up and trusts the
                             // raw data again -- see smoothLandmarks()
 
+// ---- LIVE A/B TIMING (2026-09-05) -- rolling per-frame cost of the
+// whole smoothing pass and of just the Kalman coast layer, in us, for
+// the debug HUD. _coastN counts occluded landmark-frames that actually
+// coasted (COAST on); the frame() loop rolls it into _coastRate/sec.
+function _ring(n) {
+  return { a: new Float64Array(n), i: 0, n: 0,
+    push(vMs) { this.a[this.i] = vMs * 1000; this.i = (this.i + 1) % n; if (this.n < n) this.n++; },
+    pct(q) { if (!this.n) return 0;
+      const s = Array.prototype.slice.call(this.a, 0, this.n).sort((x, y) => x - y);
+      return s[Math.min(s.length - 1, Math.floor(q * s.length))]; } };
+}
+const _smRing = _ring(120), _kfRing = _ring(120);
+let _coastN = 0, _coastRate = 0, _coastT = 0;
+
 function smoothLandmarks(cur, rawLms, nowMs) {
   if (!cur.lmF) {
-    // lazy-init: 21 landmarks x 3 axes, one One Euro filter each
+    // lazy-init: 21 landmarks x 3 axes, one One Euro filter each, plus
+    // the constant-velocity Kalman bank that shadows them for dropout.
     cur.lmF = rawLms.map(() => ({ x: oneEuro(), y: oneEuro(), z: oneEuro() }));
     cur.smLast = rawLms.map(p => ({ x: p.x, y: p.y, z: p.z || 0 }));
     cur.lmStuck = rawLms.map(() => 0);
+    cur.lmKF = SMOOTHING.makeHandKF();
+    cur.lmKFt = nowMs;
     return cur.smLast;
   }
   const span = Math.hypot(rawLms[0].x - rawLms[9].x, rawLms[0].y - rawLms[9].y) || 1;
-  const out = new Array(rawLms.length);
+  const n = rawLms.length;
+  const out = new Array(n);
   if (!cur.lmStuck) cur.lmStuck = rawLms.map(() => 0);
-  for (let i = 0; i < rawLms.length; i++) {
+  if (!cur.lmKF) { cur.lmKF = SMOOTHING.makeHandKF(); cur.lmKFt = nowMs; }
+
+  // 1. outlier decision per landmark. Same jump ceiling as ever.
+  // BUG (2026-08-25, Luis's report: "some dots stay in the background
+  // and don't go with my hand") -- the jump is measured against the
+  // HELD position. A one-frame occlusion glitch correctly gets
+  // rejected, but if the hand actually moved that far (fast motion, not
+  // noise) the next frame's jump reads against the same stale point and
+  // looks even BIGGER -- the dot sticks for good. LM_STUCK_MAX caps how
+  // many consecutive frames a point may be rejected before the ceiling
+  // gives up: sustained "outliers" are real motion.
+  const drop = new Array(n);
+  for (let i = 0; i < n; i++) {
     const raw = rawLms[i], prev = cur.smLast[i];
     const jump = Math.hypot(raw.x - prev.x, raw.y - prev.y) / span;
-    // BUG (2026-08-25, Luis's report: "some dots stay in the background
-    // and don't go with my hand") -- this always compared against the
-    // HELD position, never the real one. A one-frame occlusion glitch
-    // correctly gets rejected, but if the hand actually moved that far
-    // (fast motion, not noise), next frame's jump is measured against
-    // the same stale held point and reads even BIGGER -- the dot got
-    // stuck for good, only recoverable once the real hand drifted back
-    // within range on its own. Fix: a real glitch is a brief flicker: a
-    // few consecutive frames, not many. LM_STUCK_MAX caps how long a
-    // point can be held before the filter gives up rejecting and trusts
-    // the raw data again -- sustained "outliers" are real motion.
-    if (jump > LM_JUMP_CEIL && cur.lmStuck[i] < LM_STUCK_MAX) {
-      out[i] = prev;               // outlier: hold, don't feed the filter
+    drop[i] = jump > LM_JUMP_CEIL && cur.lmStuck[i] < LM_STUCK_MAX;
+  }
+
+  // 2. Kalman pass -- PREDICT every axis every frame (keeps the
+  // velocity estimate warm and its cost on the HUD even while COAST is
+  // off), fold the measurement in only where the point is trusted.
+  // Withholding the measurement on a dropped landmark IS the
+  // predict-through: it coasts along its last velocity, decelerating as
+  // covariance grows, instead of freezing. Timed as one block.
+  const dt = Math.min(Math.max((nowMs - cur.lmKFt) / 1000, 1 / 120), 0.1);
+  cur.lmKFt = nowMs;
+  const kfp = cur._kfp || (cur._kfp = new Float64Array(n * 3));
+  const kfT0 = performance.now();
+  for (let i = 0; i < n; i++) {
+    const raw = rawLms[i], b = i * 3, d = drop[i];
+    kfp[b]     = SMOOTHING.stepAxis(cur.lmKF, b,     dt, d ? null : raw.x).value;
+    kfp[b + 1] = SMOOTHING.stepAxis(cur.lmKF, b + 1, dt, d ? null : raw.y).value;
+    kfp[b + 2] = SMOOTHING.stepAxis(cur.lmKF, b + 2, dt, d ? null : (raw.z || 0)).value;
+  }
+  _kfRing.push(performance.now() - kfT0);
+
+  // 3. combine. One Euro is still the only steady-state smoother. It's
+  // fed the raw measurement where the point is trusted, and -- COAST on
+  // -- the Kalman prediction where it's occluded, so an occluded finger
+  // keeps gliding into One Euro instead of the frozen `prev`. COAST off
+  // is byte-identical to the original hold behaviour.
+  for (let i = 0; i < n; i++) {
+    const raw = rawLms[i], prev = cur.smLast[i], b = i * 3;
+    if (drop[i]) {
       cur.lmStuck[i]++;
+      if (COAST_ON) {
+        _coastN++;
+        out[i] = {
+          x: cur.lmF[i].x(kfp[b], nowMs),
+          y: cur.lmF[i].y(kfp[b + 1], nowMs),
+          z: cur.lmF[i].z(kfp[b + 2], nowMs),
+        };
+      } else {
+        out[i] = prev;             // outlier: hold, don't feed the filter
+      }
     } else {
       cur.lmStuck[i] = 0;
       out[i] = {
@@ -4324,8 +4405,13 @@ async function boot() {
       // (2026-08-25: the skeleton view used to draw straight from `res`
       // -- raw -- which is exactly why it visibly shook; it's just been
       // showing the noise the gesture math was already filtering out.)
+      const _smT0 = performance.now();
       const smHands = (res.landmarks || []).map((lmsRaw, i) =>
         smoothLandmarks(getCursor(i), lmsRaw, now));
+      _smRing.push(performance.now() - _smT0);
+      // COAST rate: occluded landmark-frames coasted per second, for the
+      // debug HUD's A/B readout. _coastN is bumped inside smoothLandmarks.
+      if (now - _coastT >= 1000) { _coastRate = _coastN; _coastN = 0; _coastT = now; }
       const smRes = { landmarks: smHands, handednesses: res.handednesses,
                        worldLandmarks: res.worldLandmarks };
       // ghost pose draws on the same canvas as the debug skeleton, but
@@ -5253,6 +5339,9 @@ async function boot() {
           dbg.textContent = `mode ${MODE}\nfps ${fps} (${DELEGATE}) hi ${fpsR.high ?? "-"} lo ${fpsR.low ?? "-"}\nhands ${res.landmarks.length}` +
             `\npinch ${ratio.toFixed(2)} ${cur.pinched ? "CLOSED" : "open"}` +
             `\npalm ${cur.palmOpen ? "OPEN" : "-"}${cur.fpSplay ? " CLAW" : ""} pull ph${cur.fp ? cur.fp.ph : 0}` +
+            `\nsmooth p50 ${_smRing.pct(0.5).toFixed(0)} p99 ${_smRing.pct(0.99).toFixed(0)}us` +
+            ` · kf p50 ${_kfRing.pct(0.5).toFixed(0)} p99 ${_kfRing.pct(0.99).toFixed(0)}us` +
+            ` · coast ${COAST_ON ? "ON " + _coastRate + "/s" : "off"}` +
             `\n${cur.fpDbg || ""}` + (SAMPLED ? `\n${SAMPLED}` : "");
         }
       });
