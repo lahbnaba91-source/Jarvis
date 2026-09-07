@@ -30,6 +30,10 @@ scripts/spotify/.state/
 # per-run latency log and calibration result are local runtime state.
 scripts/lightshow/state/
 
+# Codespaces usage check: usage.sh is ours and tracked, but .state/ holds a
+# fine-grained PAT (Plan: read-only) — a live credential, never committed.
+scripts/codespace-usage/.state/
+
 # barehands (vendored from jaredrhod/barehands, plus real Jarvis-specific
 # gesture/customization work) IS tracked here as of 2026-08-29 — same
 # reasoning as ai-visualizer above: it used to be excluded and rely on its
