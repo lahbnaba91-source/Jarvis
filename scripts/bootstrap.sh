@@ -1,5 +1,5 @@
 #!/bin/bash
-# Automated version of HQ/05 - Resources/Full Rebuild (disaster recovery).md
+# Automated version of HQ/05 - Resources/Vault Tooling/Full Rebuild (disaster recovery).md
 # Parts 2-5: everything that can run unattended, once the Jarvis repo itself
 # exists in this Codespace (repo creation and opening the Codespace stay
 # manual — nothing here can bootstrap from a shell that doesn't exist yet).
@@ -37,7 +37,7 @@ confirm() {
 }
 
 echo "Jarvis bootstrap — automating Full Rebuild Parts 2-5"
-echo "Full checklist: HQ/05 - Resources/Full Rebuild (disaster recovery).md"
+echo "Full checklist: HQ/05 - Resources/Vault Tooling/Full Rebuild (disaster recovery).md"
 echo
 
 # ---------------------------------------------------------------------------
@@ -77,6 +77,16 @@ else
     (cd barehands && rm -rf .git) # start-clean; barehands' own update.sh re-inits if needed
     echo "    cloned barehands fresh (no prior local history)"
   fi
+fi
+
+say "barehands media airlock"
+if [ -d barehands ]; then
+  # Only files under barehands/media/ can stage on the board; the subdirs are
+  # gitignored user content and won't come down with a fresh clone.
+  mkdir -p barehands/media/misc barehands/media/models
+  skip "barehands/media/{misc,models} present"
+else
+  skip "barehands/ not found — nothing to make an airlock in"
 fi
 
 # ---------------------------------------------------------------------------
@@ -216,14 +226,77 @@ else
   skip "Spotify setup"
 fi
 
+if confirm "Set up the claude-quota fallback account now?"; then
+  qa_dir="$HOME/.claude/quota-accounts"
+  if [ -f "$qa_dir/main.json" ] && [ -f "$qa_dir/secondary.json" ]; then
+    skip "both quota-account snapshots (main + secondary) already present"
+  else
+    echo "    Can't script the /logout + /login dance — it needs the live Claude Code session."
+    echo "    Do this (from Claude Code Quota (claude-quota)'s note):"
+    echo "      1. run:  scripts/claude-quota/watch-login.sh    (leave it running)"
+    echo "      2. in Claude Code:  /logout  then  /login  into the OTHER account"
+    echo "      3. the watcher auto-saves it as 'main' (and its email slug), then exits"
+    echo "      4. /login back into the working account, restart claude"
+    echo "    Snapshots land in $qa_dir/ (chmod 600). 'account.sh list' shows what's saved."
+  fi
+else
+  skip "claude-quota fallback account"
+fi
+
+if confirm "Set up Site Analyzer (next-app) env now?"; then
+  if [ ! -d next-app ]; then
+    skip "next-app/ not found"
+  elif [ -f next-app/.env.local ]; then
+    skip "next-app/.env.local already exists"
+  else
+    cp next-app/.env.local.example next-app/.env.local
+    ces_token=$(ask "Cesium ion token (free, ion.cesium.com — blank to fill in by hand later)" "")
+    if [ -n "$ces_token" ]; then
+      # replace the empty NEXT_PUBLIC_CESIUM_ION_TOKEN= line (token via env, not interpolated)
+      CES_TOKEN="$ces_token" python3 -c "
+import os
+p = 'next-app/.env.local'
+tok = os.environ['CES_TOKEN']
+lines = open(p).read().splitlines()
+out = ['NEXT_PUBLIC_CESIUM_ION_TOKEN=' + tok if l.startswith('NEXT_PUBLIC_CESIUM_ION_TOKEN=') else l for l in lines]
+open(p, 'w').write('\n'.join(out) + '\n')
+" && echo "    wrote next-app/.env.local with the token"
+    else
+      echo "    copied next-app/.env.local from the example — add NEXT_PUBLIC_CESIUM_ION_TOKEN by hand"
+    fi
+    echo "    'npm install' in next-app/ is a separate by-hand step (heavy — not run here)."
+  fi
+else
+  skip "Site Analyzer env"
+fi
+
+if confirm "Set up the codespace-usage billing PAT now?"; then
+  cu_token_file="scripts/codespace-usage/.state/gh-billing-token"
+  if [ -f "$cu_token_file" ]; then
+    skip "$cu_token_file already exists"
+  else
+    read -r -s -p "    Fine-grained GitHub PAT (Account -> Plan -> Read-only, nothing else; input hidden): " cu_token; echo
+    if [ -n "$cu_token" ]; then
+      mkdir -p scripts/codespace-usage/.state
+      printf '%s' "$cu_token" > "$cu_token_file"
+      chmod 600 "$cu_token_file"
+      echo "    wrote $cu_token_file (chmod 600). Any token pasted into a chat session is burned — regenerate if this one was."
+    else
+      skip "no token given — do this by hand later"
+    fi
+  fi
+else
+  skip "codespace-usage billing PAT"
+fi
+
 # ---------------------------------------------------------------------------
-# Part 5 — state-sync hooks
+# Part 5 — session hooks
 # ---------------------------------------------------------------------------
 say "Claude Code hooks (.claude/settings.json)"
 if [ -f .claude/settings.json ] && grep -q '"hooks"' .claude/settings.json; then
   skip ".claude/settings.json already has the hooks block (tracked in git, ships with the clone)"
 else
-  warn ".claude/settings.json is missing or has no hooks block — the three state-sync hooks that drive Jarvis Face/Hands need rebuilding by hand. See Jarvis Face (ai-visualizer)'s 'Where it lives' section for the exact hook commands."
+  warn ".claude/settings.json is missing or has no hooks block — rebuild by hand: the state-sync hooks that drive Jarvis Face/Hands (see Jarvis Face (ai-visualizer)'s 'Where it lives' section), plus the claude-quota SessionStart/UserPromptSubmit/PreToolUse hooks (need a claude restart to load), the vault-audit SessionStart hook, and the session-guard 'guard.sh register' SessionStart hook."
 fi
 
 # ---------------------------------------------------------------------------
