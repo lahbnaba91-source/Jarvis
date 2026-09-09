@@ -122,6 +122,79 @@ _latency_log_lock = threading.Lock()
 GESTURE_LOG = HERE / "state" / "gesture_log.jsonl"
 _gesture_log_lock = threading.Lock()
 
+
+def _lm_array(node):
+    """A 21-point hand from a recorded take -> [[x,y,z], ...], or None."""
+    if not isinstance(node, list) or len(node) != 21:
+        return None
+    out = []
+    for p in node:
+        if not isinstance(p, dict) or not isinstance(p.get("x"), (int, float)):
+            return None
+        out.append([round(p["x"], 4), round(p["y"], 4), round(p.get("z", 0) or 0, 4)])
+    return out
+
+
+def _find_hands(node):
+    """Every 21-point landmark array anywhere under node, in document order.
+    Skips worldLandmarks (3D, not what the pose detectors read)."""
+    got = _lm_array(node)
+    if got is not None:
+        return [got]
+    hands = []
+    if isinstance(node, list):
+        for v in node:
+            hands += _find_hands(v)
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            if k == "worldLandmarks":
+                continue
+            hands += _find_hands(v)
+    return hands
+
+
+def _take_frames(entry):
+    """Recorded take -> list of frames, each a list of hands ([[x,y,z]*21]).
+    IMAGE takes = one frame per snapshot; VIDEO takes = one per recorded
+    frame; anything else falls back to a single frame of whatever hands
+    are in there."""
+    snaps = entry.get("snapshots")
+    if isinstance(snaps, list):
+        return [_find_hands(s) for s in snaps]
+    frames = entry.get("frames")
+    if isinstance(frames, list):
+        return [_find_hands(f) for f in frames]
+    return [_find_hands(entry)]
+
+
+def _load_takes():
+    """Parsed gesture_log.jsonl, newest first. Each: id (line index), ts,
+    kind, label, frames, hands (max hands in any frame)."""
+    if not GESTURE_LOG.exists():
+        return []
+    takes = []
+    with open(GESTURE_LOG, "r", encoding="utf-8", errors="replace") as f:
+        for i, line in enumerate(f):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except Exception:
+                continue
+            frames = _take_frames(entry)
+            takes.append({
+                "id": i,
+                "ts": entry.get("ts"),
+                "kind": entry.get("kind", "image"),
+                "label": entry.get("label"),
+                "frames": len(frames),
+                "hands": max((len(fr) for fr in frames), default=0),
+                "_entry": entry,
+            })
+    takes.reverse()
+    return takes
+
 # GESTURE SETTINGS: the values this whole file's tuning history landed
 # on, exposed as adjustable defaults instead of buried constants in
 # stage.html. These exact numbers match what shipped before this
@@ -133,6 +206,8 @@ DEFAULT_GESTURES = {
     "peaceSign": True,       # double peace sign -> "Yeah!"
     "shush": True,           # finger on lips (face-gated) -> pause Spotify
     "pileDeck": True,        # 3+ open folders/tabs -> pile; pinch-sweep pages
+    "lightOrb": True,        # open palm held 4s -> summon/dismiss the
+                             # Hubspace light orb; tap it -> /light/toggle
     # rock-paper-scissors is NOT here -- it's the dock's session-local
     # GAME toggle (RPS_ON in stage.html), not a persisted config flag
     "rotateDragCancelPx": 800,  # px of drag since the hold started that
@@ -555,6 +630,20 @@ _CMDS = []              # queued board commands (your AI -> tracker)
 # memory, never persisted -- pure live mirror, lost on restart by design.
 _DEV_TELEMETRY = b"{}"
 _DEV_SEQ = 0            # bumped on every push; /dev/stream watches it
+# Remote arm: dev.html POSTs /dev/arm ~every 3s while it's open. The board
+# (stage.html, no ?dev=1 needed) polls GET /dev/arm and emits telemetry
+# while this stamp is fresh -- so the dashboard's "Connect" button turns the
+# feed on/off with no board reload. Stops on its own _DEV_ARM_TTL after the
+# last heartbeat (dashboard closed / lost).
+_DEV_ARM_AT = 0.0
+_DEV_ARM_TTL = 8.0
+# one-shot: dev.html's "Capture 3s" button (or the calibration panel's
+# per-pose Capture) sets this; the board reads it on its next /dev/arm
+# poll (which clears it) and fires one runImageCapture. _DEV_CAPTURE_LABEL
+# rides along so a calibration step's pose name reaches the take the same
+# way a manual RECORD's label does -- None for a plain unlabeled capture.
+_DEV_CAPTURE = False
+_DEV_CAPTURE_LABEL = None
 _ALLOWED = ("add_img", "add_card", "clear", "reset", "hand", "give",
             "yank", "hover", "scroll_note", "widget", "explode", "assemble",
             "present")
@@ -639,7 +728,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        global _STATE, _DEV_TELEMETRY, _DEV_SEQ
+        global _STATE, _DEV_TELEMETRY, _DEV_SEQ, _DEV_ARM_AT, _DEV_CAPTURE, _DEV_CAPTURE_LABEL
         n = int(self.headers.get("Content-Length", 0) or 0)
         # 262144 (256KB) was fine for every other POST body here (all tiny
         # command/state objects) but silently ate real /gesture/record
@@ -693,6 +782,64 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(204)
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if self.path == "/dev/arm":
+            # dev.html's "Connect to board" heartbeat. {on:true} refreshes the
+            # arm stamp (~every 3s while the dashboard is open); {on:false}
+            # clears it on disconnect. The board reads GET /dev/arm.
+            try:
+                on = bool(json.loads(body or b"{}").get("on", True))
+            except Exception:
+                on = True
+            _DEV_ARM_AT = time.time() if on else 0.0
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.path == "/dev/capture":
+            # dev.html "Capture 3s" (or the calibration panel, {label:
+            # "calibration:<pose>"}) -> board grabs one take on its next poll.
+            try:
+                label = json.loads(body or b"{}").get("label")
+            except Exception:
+                label = None
+            _DEV_CAPTURE = True
+            _DEV_CAPTURE_LABEL = str(label)[:60] if label else None
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.path.startswith("/dev/gestures/"):
+            # relabel a saved take: {label: "rock on"} (or null to clear).
+            try:
+                tid = int(self.path.rsplit("/", 1)[1])
+            except ValueError:
+                self._json({"error": "bad take id"}, 400)
+                return
+            try:
+                label = json.loads(body or b"{}").get("label")
+            except Exception:
+                label = None
+            with _gesture_log_lock:
+                if not GESTURE_LOG.exists():
+                    self._json({"error": "no log"}, 404)
+                    return
+                lines = GESTURE_LOG.read_text(encoding="utf-8").splitlines()
+                if not (0 <= tid < len(lines)):
+                    self._json({"error": "no such take"}, 404)
+                    return
+                try:
+                    entry = json.loads(lines[tid])
+                except Exception:
+                    self._json({"error": "corrupt take line"}, 500)
+                    return
+                if label:
+                    entry["label"] = str(label)[:60]
+                else:
+                    entry.pop("label", None)
+                lines[tid] = json.dumps(entry)
+                GESTURE_LOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            self._json({"ok": True, "label": entry.get("label")})
             return
         if self.path == "/light/toggle":
             result, code = hubspace_call("toggle")
@@ -860,6 +1007,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        global _DEV_CAPTURE, _DEV_CAPTURE_LABEL
         if self.path == "/light/status":
             result, code = hubspace_call("get")
             self._json(result, code)
@@ -1080,6 +1228,16 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(html)
             return
+        if self.path == "/dev/arm":
+            # the board polls this: emit telemetry while a dev.html heartbeat
+            # landed within _DEV_ARM_TTL. `capture` is a one-shot consumed here.
+            armed = _DEV_ARM_AT > 0 and (time.time() - _DEV_ARM_AT) < _DEV_ARM_TTL
+            cap = _DEV_CAPTURE
+            lbl = _DEV_CAPTURE_LABEL
+            _DEV_CAPTURE = False
+            _DEV_CAPTURE_LABEL = None
+            self._json({"armed": armed, "capture": cap, "label": lbl})
+            return
         if self.path == "/dev/telemetry":
             # single-shot: the latest frame (dev.html's polling fallback).
             self.send_response(200)
@@ -1122,6 +1280,27 @@ class Handler(SimpleHTTPRequestHandler):
                     time.sleep(0.03)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
+            return
+        if self.path == "/dev/gestures":
+            # index of every saved take for the dashboard's Gesture Lab.
+            takes = [{k: v for k, v in t.items() if k != "_entry"} for t in _load_takes()]
+            self._json({"takes": takes})
+            return
+        if self.path.startswith("/dev/gestures/"):
+            # one take's landmark frames, for playback + fire re-evaluation.
+            try:
+                tid = int(self.path.rsplit("/", 1)[1])
+            except ValueError:
+                self._json({"error": "bad take id"}, 400)
+                return
+            for t in _load_takes():
+                if t["id"] == tid:
+                    self._json({
+                        "id": tid, "ts": t["ts"], "kind": t["kind"],
+                        "label": t["label"], "frames": _take_frames(t["_entry"]),
+                    })
+                    return
+            self._json({"error": "no such take"}, 404)
             return
         if self.path.startswith("/dev/log"):
             # last N lines of the dev server's own log (HERE/server.log,

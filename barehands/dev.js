@@ -325,7 +325,10 @@
   // ---- status bar -------------------------------------------------
   function updateStatus(data, live) {
     var dot = $("conndot"), conn = $("conn");
-    if (!everConnected && !data) { dot.className = "dot"; conn.textContent = "connecting…"; }
+    if (!everConnected && !data) {
+      dot.className = "dot";
+      conn.textContent = armed ? "connecting… (board open?)" : "tap Connect to board";
+    }
     else if (!live) { dot.className = "dot off"; conn.textContent = "OFFLINE"; }
     else if (Date.now() - lastFrameAt > STALE_MS) { dot.className = "dot stale"; conn.textContent = "STALE"; }
     else { dot.className = "dot live"; conn.textContent = "LIVE"; }
@@ -440,6 +443,352 @@
     });
   });
 
+  // ---- calibration: guided pose capture, driven from THIS device -------
+  // 2026-09-09 CALIBRATE rework (Luis's call 2026-08-30 feedback: the old
+  // on-phone wizard was confusing, one hand holds the phone while the
+  // other has to gesture AND read instructions off the same screen).
+  // Same 5-pose x 3-rep sequence stage.html's on-phone wizard uses (kept
+  // byte-identical so both paths tag takes the same `calibration:<pose>`
+  // way), but every step's name/instructions/progress live HERE while
+  // the board just shows a glance-able toast per capture (see stage.html's
+  // pollDevArm). Each rep fires one POST /dev/capture with that pose's
+  // label; the board picks it up on its next /dev/arm poll (<=2.5s) and
+  // runs the same runImageCapture() a manual RECORD press uses.
+  var CAL_STEPS = [
+    { label: "pinch", title: "Pinch grab", instr: "Touch your thumb and index fingertip together, like picking something up." },
+    { label: "claw-charge", title: "Force-pull charge", instr: "Point thumb and index finger straight out like a finger gun, other three fingers curled in." },
+    { label: "finger-gun", title: "Finger gun", instr: "Same finger-gun shape, but curl the other three fingers into a tight fist this time." },
+    { label: "peace-sign", title: "Peace sign", instr: "Hold up your index and middle finger in a V, the other fingers curled down." },
+    { label: "rock-on", title: "Rock on", instr: "Extend your index finger and pinky, curl your middle and ring finger in." },
+  ];
+  var CAL_REPS = 3;
+  // no completion event exists on the wire -- /dev/capture is fire-and-
+  // forget, same as the gesture lab's plain "Capture 3s" button below,
+  // which already assumes success after a fixed wait. Matches
+  // runImageCapture's real timing (3s ready countdown + 2s hold + save)
+  // with margin, same 6500ms that button already uses.
+  var CAL_WAIT_MS = 6500;
+  var calStepI = 0, calRepI = 0, calCount = 0, calBusy = false;
+
+  function calButtons(disabled) {
+    ["calCaptureBtn", "calRedoBtn", "calSkipBtn", "calStopBtn"].forEach(function (id) {
+      var el = $(id);
+      if (el) el.disabled = disabled;
+    });
+  }
+
+  function calLabelFor(i) { return "calibration:" + CAL_STEPS[i].label; }
+
+  function calRenderStep() {
+    var step = CAL_STEPS[calStepI];
+    $("calProg").textContent = "POSE " + (calStepI + 1) + "/" + CAL_STEPS.length +
+      " — rep " + (calRepI + 1) + "/" + CAL_REPS;
+    $("calPoseTitle").textContent = step.title;
+    $("calPoseInstr").textContent = step.instr;
+    $("calMsg").className = "save-note"; $("calMsg").textContent = "";
+  }
+
+  function calCapture() {
+    if (calBusy || calStepI >= CAL_STEPS.length) return;
+    calBusy = true;
+    calButtons(true);
+    var msg = $("calMsg");
+    msg.className = "save-note"; msg.textContent = "board capturing… hold the pose";
+    fetch("/dev/capture", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: calLabelFor(calStepI) }),
+    }).then(function () {
+      setTimeout(function () {
+        msg.className = "save-note ok"; msg.textContent = "captured";
+        calCount++;
+        calBusy = false;
+        calButtons(false);
+        refreshTakes();
+        calAdvance();
+      }, CAL_WAIT_MS);
+    }).catch(function () {
+      msg.className = "save-note err"; msg.textContent = "capture request failed — is the board open?";
+      calBusy = false;
+      calButtons(false);
+    });
+  }
+
+  function calAdvance() {
+    calRepI++;
+    if (calRepI >= CAL_REPS) { calRepI = 0; calStepI++; }
+    if (calStepI >= CAL_STEPS.length) { calFinish(); return; }
+    calRenderStep();
+    if ($("calAuto").checked) calCapture();
+  }
+
+  function calRedo() {
+    if (calBusy) return;
+    if (calRepI > 0) calRepI--;
+    else if (calStepI > 0) { calStepI--; calRepI = CAL_REPS - 1; }
+    calRenderStep();
+  }
+
+  function calSkipPose() {
+    if (calBusy) return;
+    calStepI++; calRepI = 0;
+    if (calStepI >= CAL_STEPS.length) { calFinish(); return; }
+    calRenderStep();
+  }
+
+  function calStop() {
+    if (calBusy) return;
+    $("calRun").hidden = true;
+    $("calIntro").hidden = false;
+  }
+
+  function calFinish() {
+    $("calRun").hidden = true;
+    $("calDone").hidden = false;
+    $("calCount").textContent = calCount;
+  }
+
+  function calStart() {
+    calStepI = 0; calRepI = 0; calCount = 0;
+    $("calIntro").hidden = true; $("calDone").hidden = true; $("calRun").hidden = false;
+    calRenderStep();
+    calCapture();
+  }
+
+  (function calWire() {
+    if (!$("calbox")) return;
+    $("calStartBtn").addEventListener("click", calStart);
+    $("calRestartBtn").addEventListener("click", calStart);
+    $("calCaptureBtn").addEventListener("click", calCapture);
+    $("calRedoBtn").addEventListener("click", calRedo);
+    $("calSkipBtn").addEventListener("click", calSkipPose);
+    $("calStopBtn").addEventListener("click", calStop);
+  })();
+
+  // ---- gesture lab: saved-take playback + live fire re-evaluation ------
+  // Loads recorded takes (state/gesture_log.jsonl via /dev/gestures), plays
+  // them on the skeleton canvas, and re-runs gestures.js's pose detectors
+  // against every frame at the CURRENT slider thresholds — so you see which
+  // frames of a real recorded pose would fire, and watch that shift as you
+  // drag the cuts. Needs gestures.js loaded (a <script> in dev.html): it
+  // hangs the detectors off window.
+  var POSE_FNS = ["rockSign", "middleUpSign", "peaceSign", "shushSign",
+    "fistSign", "openPalmSign", "clawPose", "snapPose", "fingerGunSign"];
+  var POSE_SHORT = { rockSign: "rock", middleUpSign: "middle", peaceSign: "peace",
+    shushSign: "shush", fistSign: "fist", openPalmSign: "palm", clawPose: "claw",
+    snapPose: "snap", fingerGunSign: "gun" };
+  var HAVE_G = typeof window.rockSign === "function" &&
+    typeof window.configureThresh === "function";
+
+  var lab = null;            // { id, kind, label, frames:[[hand:[[x,y,z]*21],...],...] }
+  var labI = 0, labPlaying = false, labActive = false, labFrame = null, labTimer = null;
+
+  function curThreshCfg() {
+    return {
+      extendCut: +($("t_ext").value) || DEFAULTS.extendCut,
+      rockOutCut: +($("t_rout").value) || DEFAULTS.rockOutCut,
+      rockInCut: +($("t_rin").value) || DEFAULTS.rockInCut,
+    };
+  }
+
+  // pose detectors for ONE hand — array landmarks in, {x,y,z} objects the
+  // gestures.js formulas want.
+  function firesFor(handLms) {
+    if (!HAVE_G || !handLms || handLms.length < 21) return [];
+    var o = handLms.map(function (p) { return { x: p[0], y: p[1], z: p[2] || 0 }; });
+    var hit = [];
+    for (var i = 0; i < POSE_FNS.length; i++) {
+      try { if (window[POSE_FNS[i]](o)) hit.push(POSE_SHORT[POSE_FNS[i]]); } catch (e) {}
+    }
+    return hit;
+  }
+
+  function frameFires(hands) {
+    var s = {};
+    (hands || []).forEach(function (hl) { firesFor(hl).forEach(function (n) { s[n] = 1; }); });
+    return Object.keys(s);
+  }
+
+  function drawFireStrip() {
+    var box = $("firestrip");
+    if (!box) return;
+    if (!lab) { box.innerHTML = ""; return; }
+    if (HAVE_G) window.configureThresh(curThreshCfg());
+    var per = lab.frames.map(frameFires);
+    var names = {};
+    per.forEach(function (fs) { fs.forEach(function (n) { names[n] = 1; }); });
+    var rows = Object.keys(names).sort();
+    if (!rows.length) { box.innerHTML = '<p class="muted">nothing fires on any frame at these cuts</p>'; return; }
+    box.innerHTML = rows.map(function (name) {
+      var cells = per.map(function (fs, i) {
+        return '<i class="' + (fs.indexOf(name) >= 0 ? "on" : "") +
+          (i === labI ? " cur" : "") + '"></i>';
+      }).join("");
+      return '<div class="frow"><b>' + name + '</b><div class="ftrack">' + cells + "</div></div>";
+    }).join("");
+  }
+
+  function setLabFrame(i) {
+    if (!lab) return;
+    labI = Math.max(0, Math.min(lab.frames.length - 1, i | 0));
+    var hands = lab.frames[labI] || [];
+    labFrame = {
+      aspect: 4 / 3,
+      hands: hands.map(function (lms) { return { lms: lms, fired: { pinched: 0 }, hand: null }; }),
+    };
+    if (HAVE_G) window.configureThresh(curThreshCfg());
+    var fires = frameFires(hands);
+    $("playframe").textContent = (labI + 1) + " / " + lab.frames.length +
+      (fires.length ? "  ·  " + fires.join(", ") : "  ·  —");
+    var scrub = $("playscrub");
+    if (+scrub.value !== labI) scrub.value = labI;
+    drawFireStrip();
+  }
+
+  function labStep() {
+    if (!lab || !labPlaying) return;
+    setLabFrame((labI + 1) % lab.frames.length);
+    labTimer = setTimeout(labStep, lab.frames.length > 3 ? 100 : 750);
+  }
+
+  function labPlay(on) {
+    labPlaying = on && lab && lab.frames.length > 1;
+    $("playpause").textContent = labPlaying ? "❚❚" : "▶";
+    if (labTimer) { clearTimeout(labTimer); labTimer = null; }
+    if (labPlaying) labStep();
+  }
+
+  function closeLab() {
+    labActive = false; lab = null; labPlaying = false;
+    if (labTimer) { clearTimeout(labTimer); labTimer = null; }
+    $("player").hidden = true;
+  }
+
+  function openTake(id) {
+    fetch("/dev/gestures/" + id, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.frames || !j.frames.length) return;
+        lab = j; labActive = true; labI = 0;
+        $("player").hidden = false;
+        $("playttl").textContent = "take #" + j.id + (j.kind ? " · " + j.kind : "");
+        $("playlabel").value = j.label || "";
+        $("playscrub").max = Math.max(0, j.frames.length - 1);
+        setLabFrame(0);
+        labPlay(true);
+      });
+  }
+
+  function refreshTakes() {
+    fetch("/dev/gestures", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var takes = (j && j.takes) || [];
+        var ul = $("takelist");
+        if (!takes.length) {
+          ul.innerHTML = '<li class="muted">no takes yet — open the board and hit Capture 3&nbsp;s</li>';
+          return;
+        }
+        ul.innerHTML = takes.map(function (t) {
+          var when = t.ts ? new Date(t.ts * 1000).toLocaleTimeString() : "?";
+          return '<li data-id="' + t.id + '"><b>' + (t.label || "unlabeled") + "</b> " +
+            "<span>" + t.kind + " · " + t.frames + "f · " + t.hands + "h · " + when + "</span></li>";
+        }).join("");
+      })
+      .catch(function () {});
+  }
+
+  (function labWire() {
+    if (!$("labbox")) return;
+    $("takelist").addEventListener("click", function (e) {
+      var li = e.target.closest && e.target.closest("li[data-id]");
+      if (li) openTake(+li.getAttribute("data-id"));
+    });
+    $("playpause").addEventListener("click", function () { labPlay(!labPlaying); });
+    $("playclose").addEventListener("click", closeLab);
+    $("playscrub").addEventListener("input", function () {
+      labPlay(false); setLabFrame(+this.value);
+    });
+    $("playlabel").addEventListener("change", function () {
+      if (!lab) return;
+      var v = this.value.trim();
+      fetch("/dev/gestures/" + lab.id, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: v }),
+      }).then(function () { lab.label = v; refreshTakes(); }).catch(function () {});
+    });
+    $("capbtn").addEventListener("click", function () {
+      var msg = $("labmsg");
+      msg.className = "save-note"; msg.textContent = "board recording… hold the pose";
+      fetch("/dev/capture", { method: "POST" }).then(function () {
+        setTimeout(function () {
+          msg.className = "save-note ok";
+          msg.textContent = "saved (if the board was open)";
+          refreshTakes();
+        }, 6500);
+      }).catch(function () {
+        msg.className = "save-note err"; msg.textContent = "capture request failed";
+      });
+    });
+    $("mtxbtn").addEventListener("click", runMatrix);
+    // keep the fire-strip honest as the thresholds move
+    ["t_ext", "t_rout", "t_rin"].forEach(function (id) {
+      var el = $(id);
+      if (el) el.addEventListener("input", function () { if (lab) setLabFrame(labI); });
+    });
+    $("labbox").addEventListener("toggle", function () {
+      if (this.open) refreshTakes();
+    });
+  })();
+
+  // ---- confusion matrix: every take x every pose at the current cuts ---
+  function runMatrix() {
+    var box = $("matrix");
+    box.hidden = false;
+    box.innerHTML = '<p class="muted">running…</p>';
+    if (!HAVE_G) { box.innerHTML = '<p class="muted">gestures.js not loaded — can’t evaluate</p>'; return; }
+    fetch("/dev/gestures", { cache: "no-store" }).then(function (r) { return r.json(); })
+      .then(function (j) {
+        var takes = (j && j.takes) || [];
+        if (!takes.length) { box.innerHTML = '<p class="muted">no takes to run</p>'; return; }
+        var poses = POSE_FNS.map(function (n) { return POSE_SHORT[n]; });
+        var rows = new Array(takes.length);
+        var pending = takes.length;
+        takes.forEach(function (t, ti) {
+          fetch("/dev/gestures/" + t.id, { cache: "no-store" }).then(function (r) { return r.json(); })
+            .then(function (full) {
+              window.configureThresh(curThreshCfg());
+              var held = (full.frames && full.frames.length) || 1;
+              var count = {};
+              (full.frames || []).forEach(function (hands) {
+                frameFires(hands).forEach(function (n) { count[n] = (count[n] || 0) + 1; });
+              });
+              rows[ti] = { label: t.label || ("#" + t.id), held: held, count: count };
+            })
+            .catch(function () { rows[ti] = { label: "#" + t.id, held: 1, count: {} }; })
+            .then(function () { if (--pending === 0) paintMatrix(box, poses, rows); });
+        });
+      });
+  }
+
+  function paintMatrix(box, poses, rows) {
+    var h = '<table class="mtx"><tr><th>take \\ pose</th>';
+    poses.forEach(function (p) { h += "<th>" + p + "</th>"; });
+    h += "</tr>";
+    rows.forEach(function (r) {
+      h += "<tr><th>" + r.label + "</th>";
+      poses.forEach(function (p) {
+        var pct = Math.round(100 * (r.count[p] || 0) / r.held);
+        var self = r.label.toLowerCase().indexOf(p) >= 0;
+        var cls = pct === 0 ? "z" : self ? "ok" : "bad";
+        h += '<td class="' + cls + '">' + (pct || "") + "</td>";
+      });
+      h += "</tr>";
+    });
+    h += "</table><p class=\"muted\">% of a take’s frames that fire each pose, at the current cuts. " +
+      "green = the take’s own labeled pose, red = a false fire.</p>";
+    box.innerHTML = h;
+  }
+
   // ---- freeze --------------------------------------------------
   $("freeze").addEventListener("click", function () {
     frozen = !frozen;
@@ -541,7 +890,11 @@
     lastRenderT = now;
     var f = lastFrame;
     if (!frozen) {
-      if (f && f.hands && f.hands.length) {
+      if (labActive) {
+        // a saved take owns the canvas — no interpolation, it's stepped
+        view = null;
+        paint(labFrame);
+      } else if (f && f.hands && f.hands.length) {
         view = lerpView(view, f, 1 - Math.exp(-dt / 55));
         paint(view);
       } else {
@@ -573,8 +926,46 @@
       .then(function () { setTimeout(pollLog, LOG_MS); });
   }
 
+  // ---- board arm: the "Connect to board" button. This page can't reach
+  // into the board's stage.html, so instead it POSTs /dev/arm as a ~3s
+  // heartbeat; stage.html polls that and starts emitting telemetry with no
+  // reload. Auto-armed on load so it just connects — the button toggles it.
+  var armed = false, armBeat = null;
+
+  function pushArm(on) {
+    return fetch("/dev/arm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on: on }),
+      keepalive: true,
+    }).catch(function () {});
+  }
+
+  function setArmed(on) {
+    armed = on;
+    var btn = $("connbtn");
+    if (btn) {
+      btn.textContent = on ? "Disconnect" : "Connect to board";
+      btn.className = on ? "on" : "";
+    }
+    if (armBeat) { clearInterval(armBeat); armBeat = null; }
+    if (on) {
+      pushArm(true);
+      armBeat = setInterval(function () { pushArm(true); }, 3000);
+    } else {
+      pushArm(false);
+    }
+  }
+
+  (function () {
+    var b = $("connbtn");
+    if (b) b.addEventListener("click", function () { setArmed(!armed); });
+    window.addEventListener("pagehide", function () { if (armed) pushArm(false); });
+  })();
+
   sizeCanvas();
   paint(null);
+  setArmed(true);
   updateStatus(null, true);
   startStream();
   streamWatchdog();

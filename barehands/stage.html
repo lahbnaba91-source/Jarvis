@@ -104,6 +104,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   .card.ringcard.grabbed canvas {
       filter:brightness(calc(1.12 + var(--ch,0)*0.3)); }
   body.on-air .card.ringcard.grabbed canvas { filter:none; }
+  /* THE LIGHT ORB — a smaller, simpler cousin of the ring: same glass-
+     band language, no /orb polling (it reads /light/status instead),
+     amber when the lamp's on, dim slate when it's off. Summoned by an
+     open palm held 4s, dismissed the same way; tap it to flip the lamp. */
+  .card.lightorb { width:260px; padding:0; background:transparent;
+                   border:none; box-shadow:none; backdrop-filter:none; }
+  .card.lightorb canvas { display:block; width:260px; height:260px;
+                          pointer-events:none; }
+  body:not(.on-air) .card.lightorb, .card.lightorb.grabbed,
+  body.on-air .card.lightorb {
+      box-shadow:none; border:none; background:transparent; }
+  .card.lightorb.grabbed canvas {
+      filter:brightness(calc(1.12 + var(--ch,0)*0.3)); }
+  body.on-air .card.lightorb.grabbed canvas { filter:none; }
   .card.orb { width:150px; height:150px; border-radius:50%; padding:0;
       display:flex; flex-direction:column; align-items:center;
       justify-content:center; text-align:center; gap:2px; }
@@ -500,7 +514,7 @@ setTimeout(function () {
 <canvas id="skeleton"></canvas>
 <div id="behind"></div>
 <div id="boot">BAREHANDS<br><span style="color:#a8d8cf;font-size:12px;letter-spacing:0.22em">by jaredrhod</span><br><span style="color:#a8d8cf;font-size:13px">loading hand tracker… allow the camera when asked</span></div>
-<div id="hint">tap the RING = orbs · tap an orb = its tree · TAP a card = open · pinch-drag = move · hold still ~1s = 3D rotate · two hands = scale · TAP an open item = close · CLAP (palms together, fingers up) = ring center-stage · CLAW: flash open, finger-gun (thumb+index out) to aim, hold 2.5s for the shake, curl index to thumb-only to fire = force pull · MIDDLE FINGER (alone, held ~2s) = Gestures bubble · SHUSH (finger on your lips) = pause Spotify · GAME button in the dock = rock-paper-scissors vs Jarvis (then hold a throw ~1s) · 3+ open folders/tabs pile up — pinch + fast sweep R→L = next, L→R = previous · empty pinch dragged sideways = explode scrub · FLICK (pinch thumb+index like a click, then snap them apart fast) = shoot the grabbed item off screen · SPIN (hold an item with one hand, snap-pinch the OTHER hand empty-handed) = spins the held item for 4s then eases to a stop · R respawn / C camera / D debug / CAM = pair a phone's camera</div>
+<div id="hint">tap the RING = orbs · tap an orb = its tree · TAP a card = open · pinch-drag = move · hold still ~1s = 3D rotate · two hands = scale · TAP an open item = close · CLAP (palms together, fingers up) = ring center-stage · CLAW: flash open, finger-gun (thumb+index out) to aim, hold 2.5s for the shake, curl index to thumb-only to fire = force pull · MIDDLE FINGER (alone, held ~2s) = Gestures bubble · SHUSH (finger on your lips) = pause Spotify · GAME button in the dock = rock-paper-scissors vs Jarvis (then hold a throw ~1s) · 3+ open folders/tabs pile up — pinch + fast sweep R→L = next, L→R = previous · empty pinch dragged sideways = explode scrub · FLICK (pinch thumb+index like a click, then snap them apart fast) = shoot the grabbed item off screen · SPIN (hold an item with one hand, snap-pinch the OTHER hand empty-handed) = spins the held item for 4s then eases to a stop · OPEN PALM (one hand, held still ~4s, not already holding anything) = summon/dismiss the light orb, TAP the orb = toggle the lamp · R respawn / C camera / D debug / CAM = pair a phone's camera</div>
 <div id="debug"></div>
 <div id="topDock">
 <button id="topDockHandle" type="button" aria-label="toggle options">&#8942;</button>
@@ -543,6 +557,8 @@ setTimeout(function () {
       <input type="checkbox" id="gsShush"></div>
     <div class="row"><label for="gsPileDeck">🗂️ PILE DECK (3+ folders/tabs → pinch-sweep to page)</label>
       <input type="checkbox" id="gsPileDeck"></div>
+    <div class="row"><label for="gsLightOrb">💡 OPEN PALM 4s (light orb, tap = toggle lamp)</label>
+      <input type="checkbox" id="gsLightOrb"></div>
     <div class="row"><label for="gsCornerMargin">rotate drag-cancel (px)</label>
       <input type="range" id="gsCornerMargin" min="200" max="2000" step="50">
       <span class="val" id="gsCornerMarginVal"></span></div>
@@ -633,6 +649,38 @@ if (MODE === "key") {
 // watch this page's smoothed landmarks and every number the gesture
 // detectors gate on, live, for tuning.
 const DEV_ON = Q.get("dev") === "1";
+// Remote arm: without ?dev=1, poll /dev/arm so the dev dashboard's
+// "Connect" button can turn the same feed on with no reload here. The
+// per-frame gates below check (DEV_ON || devArmed). One tiny GET / 2.5s,
+// nothing else, when the dashboard never connects.
+let devArmed = false, devCapturing = false;
+if (!DEV_ON) {
+  const pollDevArm = () => fetch("/dev/arm", { cache: "no-store" })
+    .then(r => r.json()).then(j => {
+      devArmed = !!(j && j.armed);
+      // dev dashboard's "Capture 3s" button (or its calibration panel,
+      // which carries a `calibration:<pose>` label) -> one recorded take,
+      // via the same runImageCapture path a manual RECORD press uses. The
+      // phone only needs a glance-able toast here (2026-09-09 rework) --
+      // the pose name/instructions/rep count live on the SECOND device,
+      // exactly so nobody has to hold the phone AND read it AND gesture
+      // with the same hand at once.
+      if (j && j.capture && !devCapturing && typeof runImageCapture === "function") {
+        devCapturing = true;
+        if (j.label) {
+          const pose = String(j.label).replace(/^calibration:/, "").replace(/-/g, " ");
+          toast("📸 " + pose + " — hold the pose", 5000);
+        } else {
+          toast("📸 capturing — hold the pose", 3500);
+        }
+        runImageCapture({ silent: true, label: j.label || undefined,
+          onDone: () => { devCapturing = false; } });
+      }
+    })
+    .catch(() => { devArmed = false; });
+  setInterval(pollDevArm, 2500);
+  pollDevArm();
+}
 
 const cam = document.getElementById("cam");
 const BEHIND = document.getElementById("behind");
@@ -746,6 +794,7 @@ const gsFingerGun = document.getElementById("gsFingerGun");
 const gsPeaceSign = document.getElementById("gsPeaceSign");
 const gsShush = document.getElementById("gsShush");
 const gsPileDeck = document.getElementById("gsPileDeck");
+const gsLightOrb = document.getElementById("gsLightOrb");
 const gsCornerMargin = document.getElementById("gsCornerMargin");
 const gsCornerMarginVal = document.getElementById("gsCornerMarginVal");
 const gsRotateLatchMs = document.getElementById("gsRotateLatchMs");
@@ -764,6 +813,7 @@ function syncGesturePanel() {
   gsPeaceSign.checked = !!g.peaceSign;
   gsShush.checked = !!g.shush;
   gsPileDeck.checked = !!g.pileDeck;
+  gsLightOrb.checked = !!g.lightOrb;
   gsCornerMargin.value = g.rotateDragCancelPx;
   gsCornerMarginVal.textContent = g.rotateDragCancelPx + "px";
   gsRotateLatchMs.value = g.rotateLatchMs;
@@ -795,6 +845,7 @@ document.getElementById("settingsSave").addEventListener("click", async () => {
     peaceSign: gsPeaceSign.checked,
     shush: gsShush.checked,
     pileDeck: gsPileDeck.checked,
+    lightOrb: gsLightOrb.checked,
     rotateDragCancelPx: Number(gsCornerMargin.value),
     rotateLatchMs: Number(gsRotateLatchMs.value),
     fingerGunCurl: Number(gsFingerGunCurl.value),
@@ -1091,11 +1142,22 @@ document.getElementById("calSkip").addEventListener("click", () => {
 
 // Auto-offered once, on a fresh browser/device that's never seen this
 // page before (localStorage is per-origin, so a new phone or a cleared
-// cache sees it again -- intentional, matches "works for anyone" rather
-// than "works for anyone who already ran it once on THIS phone").
+// cache sees it again). 2026-09-09 rework: the old behavior force-opened
+// the on-phone wizard below immediately -- Luis's confusing case, one
+// hand holds the phone while the other has to gesture AND read
+// instructions off the same screen. Replaced with a one-time pointer at
+// the second-device flow instead (dev.html's Calibration panel, which
+// drives THIS page's captures remotely via /dev/capture -- see the
+// pollDevArm callback above): instructions live on a laptop/second
+// phone, this page just shows a toast per capture. CALIBRATE in the
+// dock still opens the on-phone wizard directly for anyone without a
+// second device handy -- that flow is untouched, just no longer forced.
 function maybeShowCalibrationWizard() {
   if (localStorage.getItem(CAL_STORAGE_KEY)) return;
-  calBtn.click();
+  localStorage.setItem(CAL_STORAGE_KEY, "1");
+  toast("First time here — for calibration, open /dev on a second device " +
+    "and use its Calibration panel. (Or tap CALIBRATE here to do it on " +
+    "this phone instead.)", 8000);
 }
 
 let items = [];        // cards + panels: {el,type,x,y,scale,vx,vy,grabbedBy:[],ox,oy,flying,file,stretch,scrollY,body}
@@ -1555,6 +1617,122 @@ function renderRings() {
     drawRing(sc);
   });
   RING.live = RINGS.size;
+}
+
+// ---- THE LIGHT ORB — a smaller cousin of the ring for the Hubspace
+// lamp (2026-09-09). No live /orb polling like the assistant ring:
+// this reads /light/status directly on its own slower interval, since
+// it's showing real cloud-lamp state, not the assistant's mood. Amber
+// glass when the lamp's on, dim slate glass when it's off, a soft
+// pulse on tap. Summoned by an open palm held 4s (see the gesture
+// block below), dismissed the same way; tapping it flips the lamp via
+// /light/toggle instead of opening anything.
+const LIGHT = { on: null, live: 0 };
+const LIGHTORBS = new Map();   // item id -> {canvas, ctx, RES, tapT}
+
+setInterval(async () => {
+  if (!LIGHT.live) return;      // poll only while an orb is up
+  try {
+    const r = await fetch("/light/status", { cache: "no-store" });
+    if (r.ok) { const j = await r.json(); LIGHT.on = !!j.on; }
+  } catch (e) {}
+}, 1500);
+
+function lightOrbCanvas(el) {
+  const canvas = el.querySelector("canvas");
+  const RES = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = 260 * RES; canvas.height = 260 * RES;
+  return { canvas, ctx: canvas.getContext("2d"), RES, tapT: 0 };
+}
+
+function makeLightWidget(x, y) {
+  const el = document.createElement("div");
+  el.className = "card lightorb";
+  el.innerHTML = `<canvas></canvas>`;
+  BEHIND.appendChild(el);
+  const it = { el, id: UID++, type: "widget",
+    def: { title: "Light", file: "", w: "light" },
+    x: x ?? innerWidth * 0.5, y: y ?? innerHeight * 0.4, scale: 1,
+    vx: 0, vy: 0, grabbedBy: [], ox: 0, oy: 0, flying: false, stretch: null };
+  it.anim = { k: "in", t: 0 }; it.el.style.opacity = "0.05";
+  LIGHTORBS.set(it.id, lightOrbCanvas(el));
+  items.push(it);
+  return it;
+}
+
+function drawLightOrb(sc) {
+  const t = Date.now() / 1000;
+  const on = LIGHT.on;
+  // unknown state (no poll landed yet) reads as a dim, uncommitted
+  // blue -- distinct from both real on/off so it never lies
+  const col = on === null ? [110, 160, 200] : on ? [255, 179, 71] : [120, 135, 150];
+  const c = a => `rgba(${col[0]},${col[1]},${col[2]},${a})`;
+  const hot = a => `rgba(255,240,220,${a})`;
+  const x = sc.ctx;
+  const tap = Math.exp(-Math.max(0, t - sc.tapT) * 4);
+  const breath = 0.9 + 0.1 * Math.sin(t * 1.4);
+  const glow = (8 + (on ? 20 : 6) + tap * 14) * breath;
+  x.setTransform(sc.RES, 0, 0, sc.RES, 0, 0);
+  x.clearRect(0, 0, 260, 260);
+  x.save();
+  x.translate(130, 130);
+  x.shadowColor = c(0.95);
+  x.shadowBlur = glow + 6;
+  x.strokeStyle = c(0.9);
+  x.lineWidth = 14;
+  x.beginPath(); x.arc(0, 0, 102, 0, 7); x.stroke();
+  x.shadowBlur = 5 + tap * 10;
+  x.strokeStyle = hot(0.8); x.lineWidth = 2;
+  x.beginPath(); x.arc(0, 0, 112, 0, 7); x.stroke();
+  x.shadowBlur = 4;
+  x.strokeStyle = c(0.45); x.lineWidth = 1.2;
+  x.beginPath(); x.arc(0, 0, 94, 0, 7); x.stroke();
+  x.shadowBlur = 0;
+  for (let i = 0; i < 32; i++) {
+    const a = i / 32 * Math.PI * 2;
+    const big = i % 4 === 0;
+    x.strokeStyle = c(big ? 0.55 : 0.28);
+    x.lineWidth = big ? 1.6 : 1;
+    x.beginPath();
+    x.moveTo(Math.cos(a) * (big ? 84 : 87), Math.sin(a) * (big ? 84 : 87));
+    x.lineTo(Math.cos(a) * 91, Math.sin(a) * 91);
+    x.stroke();
+  }
+  x.shadowBlur = 10; x.shadowColor = c(0.9);
+  x.font = "600 15px SF Mono, Menlo, monospace";
+  x.textAlign = "center"; x.textBaseline = "middle";
+  x.fillStyle = hot(0.95);
+  x.fillText(on === null ? "…" : on ? "ON" : "OFF", 0, -2);
+  x.shadowBlur = 0;
+  x.font = "10px SF Mono, Menlo, monospace";
+  x.fillStyle = c(0.85);
+  x.fillText("LIGHT · tap", 0, 20);
+  x.restore();
+}
+
+function renderLightOrbs() {
+  LIGHTORBS.forEach((sc, id) => {
+    if (!sc.canvas.isConnected) { LIGHTORBS.delete(id); return; }
+    const holder = items.find(k => k.id === id);
+    if (holder) { sc.scale = holder.scale; sc.held = holder.grabbedBy.length > 0; }
+    drawLightOrb(sc);
+  });
+  LIGHT.live = LIGHTORBS.size;
+}
+
+// tap on the orb flips the lamp; the summon/dismiss gesture (below)
+// owns creating/killing the widget itself, this never does either
+function flipLight() {
+  fetch("/light/toggle", { method: "POST" }).catch(() => {});
+}
+
+// OPEN PALM 4s (gesture block below) calls this: no existing orb ->
+// summon one at the hand's position; one already up -> dismiss it.
+// Mirrors summonWidget()'s single-instance rule for the ring.
+function toggleLightWidget(x, y) {
+  const ex = items.find(i => i.type === "widget" && i.def.w === "light" && i.el.isConnected);
+  if (ex) { killItem(ex); return; }
+  makeLightWidget(x, y);
 }
 
 // ---- 3D HOLOGRAMS —
@@ -2269,7 +2447,7 @@ function ringToggle(ring) {
 // never a crash, just the same defaults the server would have sent.
 const DEFAULT_GESTURES = {
   rockOn: true, fingerGun: true, peaceSign: true,
-  shush: true, pileDeck: true,
+  shush: true, pileDeck: true, lightOrb: true,
   rotateDragCancelPx: 800, rotateLatchMs: 2000, fingerGunCurl: 0.92,
   // gestures.js THRESH.* — mirrored here so CFG.gestures always carries
   // them (the dev dashboard reads them straight off the telemetry) and
@@ -3240,6 +3418,7 @@ function firePeaceSign() {
 // it registered. A second shush while paused-by-shush resumes. shushBusy
 // guards against a double-fire while the fetch round-trip is in flight.
 let shushHoldSince = 0, shushFired = false, shushedByUs = false, shushBusy = false;
+let lightHoldSince = 0, lightFired = false, lightAnchorX = 0, lightAnchorY = 0;
 function fireShush() {
   if (shushBusy) return;
   shushBusy = true;
@@ -3864,6 +4043,11 @@ function endGrab(c, i, cur) {
           const sc = RINGS.get(c.id);
           if (sc) sc.tapT = Date.now() / 1000;   // the ring's tap pulse
           ringToggle(c);
+        } else if (c.type === "widget" && c.def.w === "light" &&
+            c.mode === "move") {
+          const sc = LIGHTORBS.get(c.id);
+          if (sc) sc.tapT = Date.now() / 1000;   // the orb's tap pulse
+          flipLight();
         } else if (c.type === "orb") {
           openBrowser(c.def.orb, c.x, c.y);
         }
@@ -4460,7 +4644,7 @@ async function boot() {
           cur.el.classList.remove("lost");
         }
         const lms = smHands[i];   // already smoothed in the pre-pass above
-        if (DEV_ON) {   // dev-dashboard telemetry reads these
+        if (DEV_ON || devArmed) {   // dev-dashboard telemetry reads these
           cur.smLms = lms;
           const _hd = res.handednesses && res.handednesses[i] && res.handednesses[i][0];
           cur.devHand = _hd ? _hd.categoryName : null;
@@ -5470,6 +5654,36 @@ async function boot() {
         pointHoldSince = 0; pointFired = false;
       }
 
+      // OPEN PALM (2026-09-09): one hand, palm open, held roughly still
+      // for a full 4s -- summons/dismisses the light orb (toggleLightWidget
+      // below). Deliberately the longest hold in this file: open palm is
+      // the pose your hand ends up in mid-motion constantly (releasing a
+      // drag, catching balance, just relaxing), so every other gesture
+      // here uses a SPECIFIC curled shape to stay unambiguous. This one
+      // can't -- it's the one pose left unclaimed -- so it leans on
+      // duration + stillness instead: 4s is long enough that reaching for
+      // something, waving, or an open-palm RPS throw never brushes it.
+      // Same drift-reset pattern as MIDDLE FINGER above, just a tighter
+      // radius (35px) since 4s gives drift far more time to accumulate.
+      // Gated off during RPS (palm = "paper") and while a hand is holding
+      // anything, so it can never fire mid-interaction.
+      const palmCand = CFG.gestures.lightOrb && !RPS_ON &&
+        !items.some(k => k.grabbedBy.length) &&
+        seenArr.length === 1 && cursors[seenArr[0]] &&
+        cursors[seenArr[0]].openPalmSign ? cursors[seenArr[0]] : null;
+      if (palmCand) {
+        if (!lightHoldSince) { lightHoldSince = now; lightAnchorX = palmCand.x; lightAnchorY = palmCand.y; }
+        const ldrift = Math.hypot(palmCand.x - lightAnchorX, palmCand.y - lightAnchorY);
+        if (ldrift > 35) {
+          lightHoldSince = now; lightAnchorX = palmCand.x; lightAnchorY = palmCand.y; lightFired = false;
+        } else if (!lightFired && now - lightHoldSince > 4000) {
+          lightFired = true;
+          toggleLightWidget(palmCand.x, palmCand.y);
+        }
+      } else {
+        lightHoldSince = 0; lightFired = false;
+      }
+
       // THE SHUSH: one hand, index-alone pose, index fingertip actually
       // near the FaceDetector's mouth keypoint (radius scales with the
       // detected face), held ~250ms so a passing hand can't fire it.
@@ -5649,8 +5863,9 @@ async function boot() {
     updatePileDeck(dt);       // 3+ open folders/tabs collapse into a deck
     renderModels();           // the 3D holograms draw their frames
     renderRings();            // the ring draws its frames (both pages)
+    renderLightOrbs();        // the light orb draws its own frames too
     pushState(now);           // stream the scene to the OBS render page
-    if (DEV_ON) pushDevTelemetry(now);   // ?dev=1 only — see below
+    if (DEV_ON || devArmed) pushDevTelemetry(now);   // ?dev=1 or armed by the dev dashboard — see below
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -5968,6 +6183,7 @@ async function renderLoop() {
         if (rItems[k].msc) disposeScene(rItems[k].msc);
         rItems[k].el.remove(); delete rItems[k]; } });
     renderRings();               // the ring draws its own frames
+    renderLightOrbs();           // the light orb draws its own frames too
   } catch (e) {}
   requestAnimationFrame(renderLoop);
 }

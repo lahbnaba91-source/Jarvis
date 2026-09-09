@@ -53,6 +53,10 @@
     background:rgba(13,17,22,.82);border:1px solid var(--line);color:var(--ink);
     font-size:12px;padding:6px 12px;border-radius:8px}
   #freeze.on{border-color:var(--accent);color:var(--accent)}
+  #connbtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;
+    -webkit-appearance:none;appearance:none}
+  #connbtn.on{border-color:var(--ok);color:var(--ok)}
   .hand{background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:11px;margin-top:10px}
   .hand h2{margin:0 0 8px;font-size:12px;letter-spacing:.1em;color:var(--dim);
@@ -108,6 +112,42 @@
   .save-note{font-size:11px;color:var(--dim);padding:6px 0 8px}
   .save-note.ok{color:var(--ok)}
   .save-note.err{color:var(--hot)}
+  /* gesture lab */
+  .labrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+  .labrow button{background:var(--panel2);border:1px solid var(--line);
+    color:var(--ink);font-size:12px;padding:6px 11px;border-radius:8px;
+    -webkit-appearance:none;appearance:none}
+  #takelist{list-style:none;margin:4px 0 0;padding:0;max-height:190px;overflow:auto}
+  #takelist li{padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+    margin-bottom:5px;background:var(--panel2);font-size:12px}
+  #takelist li b{color:var(--ink);text-transform:none;letter-spacing:0}
+  #takelist li span{color:var(--dim);font-size:11px}
+  #takelist li.muted{color:var(--dim);background:transparent}
+  #player{margin-top:10px;border-top:1px solid var(--line);padding-top:9px}
+  #playhdr{display:flex;gap:8px;align-items:center;margin-bottom:7px}
+  #playhdr b{color:var(--accent);font-size:12px}
+  #playlabel{flex:1;min-width:90px;background:var(--panel2);border:1px solid var(--line);
+    color:var(--ink);border-radius:7px;padding:5px 8px;font-size:12px}
+  #playtransport{display:flex;gap:8px;align-items:center;margin-top:8px}
+  #playtransport input[type=range]{flex:1;accent-color:var(--accent)}
+  #playpause,#playclose{background:var(--panel2);border:1px solid var(--line);
+    color:var(--ink);border-radius:7px;padding:5px 10px;font-size:13px}
+  #playframe{color:var(--dim);font:11px/1 ui-monospace,Menlo,monospace;white-space:nowrap}
+  #firestrip{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+  .frow{display:flex;align-items:center;gap:8px}
+  .frow b{width:52px;text-align:right;color:var(--dim);font-size:11px;
+    text-transform:none;letter-spacing:0}
+  .ftrack{flex:1;display:flex;gap:1px;height:12px}
+  .ftrack i{flex:1;min-width:1px;background:var(--panel2);border-radius:1px}
+  .ftrack i.on{background:var(--accent)}
+  .ftrack i.cur{outline:1px solid var(--warn);outline-offset:-1px}
+  table.mtx{border-collapse:collapse;width:100%;font-size:11px;margin-top:6px}
+  table.mtx th,table.mtx td{border:1px solid var(--line);padding:4px 5px;text-align:center}
+  table.mtx th{color:var(--dim);font-weight:600;background:var(--panel2)}
+  table.mtx td.z{color:var(--line)}
+  table.mtx td.ok{background:rgba(87,224,138,.18);color:var(--ok);font-weight:700}
+  table.mtx td.bad{background:rgba(255,70,70,.16);color:var(--hot);font-weight:700}
+  .muted{color:var(--dim);font-size:11px}
 </style>
 </head>
 <body>
@@ -115,6 +155,7 @@
 
 <div class="bar">
   <span><span id="conndot" class="dot"></span><b id="conn">…</b></span>
+  <button id="connbtn" type="button">Connect to board</button>
   <span>fps <b id="fps">–</b></span>
   <span>delegate <b id="delegate">–</b></span>
   <span>smooth p50/p99 <b id="smooth">–</b> µs</span>
@@ -128,6 +169,61 @@
 </div>
 
 <div id="hands"></div>
+
+<details id="calbox" open>
+  <summary>calibration — guided pose capture, drives the board remotely</summary>
+  <div id="calIntro">
+    <p class="muted">Walks through 5 poses × 3 reps. Prop the board phone up
+      so it can see your hand — every capture fires remotely from here, no
+      need to touch or look at the phone.</p>
+    <button id="calStartBtn" type="button">Start</button>
+  </div>
+  <div id="calRun" hidden>
+    <div class="labrow"><b id="calProg"></b></div>
+    <h2 id="calPoseTitle" style="margin:6px 0 2px;font-size:16px;color:var(--accent)"></h2>
+    <p id="calPoseInstr" class="muted" style="margin:0 0 9px"></p>
+    <div class="labrow">
+      <button id="calCaptureBtn" type="button">Capture this rep</button>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--dim)">
+        <input id="calAuto" type="checkbox" checked> auto-advance</label>
+    </div>
+    <div class="labrow">
+      <button id="calRedoBtn" type="button">Redo last rep</button>
+      <button id="calSkipBtn" type="button">Skip this pose</button>
+      <button id="calStopBtn" type="button">Stop</button>
+    </div>
+    <span id="calMsg" class="save-note"></span>
+  </div>
+  <div id="calDone" hidden>
+    <p class="save-note ok">Calibration complete — <b id="calCount">0</b> takes captured.</p>
+    <button id="calRestartBtn" type="button">Run again</button>
+  </div>
+</details>
+
+<details id="labbox">
+  <summary>gesture lab — play &amp; refine saved takes</summary>
+  <div class="labrow">
+    <button id="capbtn" type="button">Capture 3&nbsp;s</button>
+    <button id="mtxbtn" type="button">Confusion matrix</button>
+    <span id="labmsg" class="save-note"></span>
+  </div>
+  <ul id="takelist"></ul>
+  <div id="player" hidden>
+    <div id="playhdr">
+      <b id="playttl">take</b>
+      <input id="playlabel" type="text" placeholder="label (e.g. rock on)" maxlength="60"
+        autocorrect="off" autocapitalize="off" spellcheck="false">
+      <button id="playclose" type="button" title="back to live">×</button>
+    </div>
+    <div id="firestrip"></div>
+    <div id="playtransport">
+      <button id="playpause" type="button">▶</button>
+      <input id="playscrub" type="range" min="0" max="0" step="1" value="0">
+      <span id="playframe">0/0</span>
+    </div>
+  </div>
+  <div id="matrix" hidden></div>
+</details>
 
 <details id="tuning" open>
   <summary>thresholds — live, writes to /config</summary>
@@ -170,6 +266,7 @@
   <pre id="log">…</pre>
 </details>
 
+<script src="gestures.js"></script>
 <script src="dev.js"></script>
 </body>
 </html>
