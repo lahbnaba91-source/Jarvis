@@ -67,3 +67,16 @@ __pycache__/
 # pull-hq-vault.py's own hidden baseline clone -- a change-detection sensor,
 # never the vault content itself (that stays HQ/, a plain copy on purpose).
 .hq-vault-pull-sensor/
+
+# Gesture classifier (scripts/gesture-classifier/): the pipeline scripts are
+# ours and tracked, but the venv, the extracted feature cache, and the
+# trained Keras model are all derived from personal recorded-take data --
+# regenerate locally with extract_features.py / train.py, never portable.
+scripts/gesture-classifier/.venv/
+scripts/gesture-classifier/*.npz
+scripts/gesture-classifier/model/
+
+# The exported TFJS model (export_tfjs.py's output) is a binary artifact
+# derived from the same personal data -- not tracked until it's a real
+# trained model worth shipping, and even then reconsider vs. regenerating.
+barehands/model/
