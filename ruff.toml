@@ -1,0 +1,20 @@
+# Lint config for first-party Python.
+#
+# Out of scope (each has its own story): the vendored trees carry upstream
+# style we don't own, jarvis-voice has its own pyproject, and the
+# gesture-classifier scripts are derived-from-personal-data pipeline code.
+line-length = 100
+target-version = "py312"
+
+exclude = [
+    "ai-visualizer",
+    "barehands",
+    "jarvis-voice",
+    "scripts/gesture-classifier",
+]
+
+[lint]
+# Start narrow: real bugs (pyflakes), syntax/statement errors, and import
+# ordering. E501 line-length and the modernization/bugbear rules (UP, B, SIM)
+# are a deliberate follow-up pass, not a blocker for turning the gate on.
+select = ["E4", "E7", "E9", "F", "I"]

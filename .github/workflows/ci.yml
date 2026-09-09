@@ -7,8 +7,10 @@ name: CI
 on:
   push:
     branches: ["**"]
+    paths-ignore: ["**/*.md", "HQ/**"]
   pull_request:
     branches: [main]
+    paths-ignore: ["**/*.md", "HQ/**"]
 
 # A newer push to the same branch/PR cancels the older run.
 concurrency:
@@ -23,8 +25,8 @@ jobs:
       run:
         working-directory: services/badge
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
       # BADGE has zero npm dependencies (stdlib + child_process only), so
@@ -43,8 +45,8 @@ jobs:
       run:
         working-directory: next-app
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -66,10 +68,34 @@ jobs:
       run:
         working-directory: barehands
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
       # No package.json — the tests are pure-Node, no deps, no fixtures.
       - run: node test/test-smoothing.js
       - run: node test/test-gestures.js
+
+  python:
+    name: Python (vault tooling)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: pip install ruff pytest
+      - name: Lint
+        run: ruff check .
+      - name: Test
+        run: pytest
+
+  shell:
+    name: Shell (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # shellcheck ships on the ubuntu-latest runner image.
+      - name: Check tracked shell scripts
+        run: shellcheck -S error $(git ls-files '*.sh')

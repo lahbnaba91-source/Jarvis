@@ -24,7 +24,6 @@ import difflib
 import json
 import os
 import re
-import sys
 
 VAULT = "/workspaces/Jarvis/HQ"
 
