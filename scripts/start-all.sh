@@ -19,3 +19,8 @@ start "jarvis-voice"  8791 /workspaces/Jarvis/jarvis-voice ".venv/bin/python ser
 start "barehands"     8794 /workspaces/Jarvis/barehands "python3 server.py" state/server.log
 
 echo "jarvis-voice takes a few seconds to warm models — tail tmp/server.log for 'jarvis-voice ready'."
+
+# barehands self-test: confirms the board, the face-mesh worker asset and
+# the MediaPipe CDN deps are all reachable, and prints the live /health
+# snapshot. Backgrounded so it never delays the stack; prints when ready.
+( sleep 3; bash "$(cd "$(dirname "$0")" && pwd)/barehands-selftest.sh" ) &

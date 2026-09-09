@@ -122,6 +122,20 @@ _latency_log_lock = threading.Lock()
 GESTURE_LOG = HERE / "state" / "gesture_log.jsonl"
 _gesture_log_lock = threading.Lock()
 
+# DIAGNOSTICS (2026-09-09): stage.html and face-mesh-worker.js POST every
+# capability probe, state transition and failure to POST /diag, so a
+# headless phone's problems are readable server-side instead of guessed
+# at. Kept in memory (last _DIAG_MAX, newest last) AND appended to
+# state/diag.jsonl. GET /diag returns them (add ?html=1 for a page);
+# GET /health folds the latest of each kind into one snapshot. The
+# barehands-watch.sh / barehands-selftest.sh scripts read these.
+# See barehands/DIAGNOSTICS.md.
+DIAG_LOG = HERE / "state" / "diag.jsonl"
+_diag_lock = threading.Lock()
+_DIAG = []
+_DIAG_MAX = 300
+_DIAG_LATEST = {}   # newest event of each "kind", for /health
+
 
 def _lm_array(node):
     """A 21-point hand from a recorded take -> [[x,y,z], ...], or None."""
@@ -667,7 +681,8 @@ class Handler(SimpleHTTPRequestHandler):
         # fixes (this bit cam.html mid-testing, 2026-08-25; and dev.html /
         # dev.js are tuning tools you iterate on live, same deal).
         if self.path.split("?")[0].endswith(
-                ("stage.html", "cam.html", "dev.html", "dev.js")):
+                ("stage.html", "cam.html", "dev.html", "dev.js",
+                 "face-mesh-worker.js")):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
@@ -762,6 +777,32 @@ class Handler(SimpleHTTPRequestHandler):
             self._json({"error": f"body too large (max {MAX_BODY // (1024 * 1024)}MB)"}, 413)
             return
         body = self.rfile.read(n) if n > 0 else b"{}"
+        if self.path == "/diag":
+            # diagnostics sink -- see the DIAGNOSTICS block up top. Never
+            # touches board/persisted state; best-effort, always 204.
+            try:
+                ev = json.loads(body or b"{}")
+                if not isinstance(ev, dict):
+                    ev = {"kind": "non-object", "value": ev}
+            except Exception:
+                ev = {"kind": "bad-json",
+                      "raw": body[:500].decode("utf-8", "replace")}
+            ev.setdefault("t", time.time())
+            ev.setdefault("kind", "unknown")
+            ev["ip"] = self._client_ip()
+            with _diag_lock:
+                _DIAG.append(ev)
+                del _DIAG[:-_DIAG_MAX]
+                _DIAG_LATEST[ev["kind"]] = ev
+                try:
+                    with open(DIAG_LOG, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(ev) + "\n")
+                except Exception:
+                    pass
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self.path == "/state":
             # the tracker's heartbeat doubles as the command channel
             _STATE = body
@@ -1323,6 +1364,71 @@ class Handler(SimpleHTTPRequestHandler):
                 lines = [f"(log read error: {e})"]
             self._json({"lines": lines})
             return
+        if self.path.split("?")[0] == "/diag":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            with _diag_lock:
+                events = list(_DIAG)
+            if q.get("html"):
+                def _row(e):
+                    when = time.strftime("%H:%M:%S", time.localtime(e.get("t", 0)))
+                    rest = {k: v for k, v in e.items() if k not in ("t", "ip")}
+                    return (f"<tr><td>{when}</td><td>{e.get('kind','')}</td>"
+                            f"<td><pre>{json.dumps(rest, indent=1)}</pre></td></tr>")
+                rows = "\n".join(_row(e) for e in reversed(events))
+                html = (
+                    "<!doctype html><meta charset=utf-8><title>barehands diag</title>"
+                    "<meta name=viewport content='width=device-width,initial-scale=1'>"
+                    "<style>body{font:12px ui-monospace,monospace;background:#111;color:#ddd;"
+                    "margin:0;padding:12px}table{border-collapse:collapse;width:100%}"
+                    "td{border-top:1px solid #333;padding:4px 8px;vertical-align:top}"
+                    "td:nth-child(2){color:#8ff0e4;white-space:nowrap}"
+                    "pre{margin:0;white-space:pre-wrap;word-break:break-all}</style>"
+                    "<p><a href='/diag?html=1' style='color:#8ff0e4'>refresh</a> &nbsp; "
+                    f"{len(events)} events, newest first</p><table>{rows}</table>")
+                b = html.encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(b)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(b)
+                return
+            self._json({"events": events})
+            return
+        if self.path.split("?")[0] == "/health":
+            with _diag_lock:
+                latest = {k: dict(v) for k, v in _DIAG_LATEST.items()}
+            now = time.time()
+
+            def _age(k):
+                e = latest.get(k)
+                return round(now - e["t"], 1) if e else None
+            hb = latest.get("hands-heartbeat", {})
+            fm = latest.get("facemesh-state", {})
+            csp = latest.get("csp-violation", {})
+            probe = latest.get("boot-probe", {})
+            out = {
+                "ts": now,
+                "since_server_start_s": _age("server-start"),
+                "hands_ok": hb.get("detectorOk"),
+                "hands_fps": hb.get("fps"),
+                "hands_seen_recently": hb.get("everSawHand"),
+                "hands_age_s": _age("hands-heartbeat"),
+                "facemesh_state": fm.get("state"),
+                "facemesh_detail": fm.get("detail"),
+                "facemesh_mode": fm.get("mode"),
+                "facemesh_age_s": _age("facemesh-state"),
+                "csp_blocked": csp.get("blockedURI"),
+                "csp_directive": csp.get("violatedDirective"),
+                "csp_age_s": _age("csp-violation"),
+                "last_error": (latest.get("error", {}) or {}).get("msg"),
+                "last_worker_error": (latest.get("worker-error", {}) or {}).get("msg"),
+                "ua": probe.get("ua"),
+                "probe": probe or None,
+                "event_kinds": sorted(latest.keys()),
+            }
+            self._json(out)
+            return
         if not self.path.startswith("/note?"):
             return super().do_GET()
         # one note's text: f=<orb>/<relpath>, resolved against that orb's
@@ -1353,6 +1459,14 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     (HERE / "state").mkdir(exist_ok=True)   # the ring's runtime files land here
+    _startev = {"kind": "server-start", "t": time.time(), "src": "server"}
+    _DIAG.append(_startev)
+    _DIAG_LATEST["server-start"] = _startev
+    try:
+        with open(DIAG_LOG, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_startev) + "\n")
+    except Exception:
+        pass
     port = int(CONFIG.get("port", 8794))
     print(f"barehands up: http://127.0.0.1:{port}/stage.html", flush=True)
     # 0.0.0.0, not 127.0.0.1: Codespaces' automatic port-forward detection

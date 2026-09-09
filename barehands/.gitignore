@@ -8,6 +8,7 @@ state/wave.json
 # runtime logs -- grow forever, not code
 state/server.log
 state/gesture_log.jsonl
+state/diag.jsonl
 # derived from gesture_log.jsonl above -- same reasoning, personal
 # recorded-take data, not portable test fixture. Regenerate locally
 # with: node test/test-gestures.js --update

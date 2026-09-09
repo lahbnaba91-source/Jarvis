@@ -600,8 +600,126 @@ setTimeout(function () {
      SMOOTHING is a plain global by the time the module below runs. -->
 <script src="smoothing.js"></script>
 <script type="module">
-import { HandLandmarker, FaceDetector, FilesetResolver } from
+import { HandLandmarker, FaceDetector, FaceLandmarker, FilesetResolver } from
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+// ============================================================
+// DIAGNOSTICS (2026-09-09): the board runs headless on a phone whose
+// console nobody can see. Every capability probe, every state change and
+// every failure in the hand/face pipelines is POSTed to /diag on the
+// server, where barehands-watch.sh / GET /health / GET /diag?html=1 can
+// read it. `diag()` is fire-and-forget and swallows its own errors so it
+// can never itself break a frame. See barehands/DIAGNOSTICS.md.
+// ============================================================
+const _Q0 = new URLSearchParams(location.search);
+// ?facemesh=worker (default) | main (run FaceLandmarker on the main
+// thread -- bisects worker/CSP problems) | off. ?facemesh-delegate=cpu
+// (default) | gpu. ?diag=0 hides the on-screen strip (still POSTs).
+const FACEMESH_MODE = (_Q0.get("facemesh") || "worker").toLowerCase();
+const FACEMESH_DELEGATE = (_Q0.get("facemesh-delegate") || "cpu").toLowerCase();
+const DIAG_STRIP_ON = _Q0.get("diag") !== "0";
+let _diagSeq = 0;
+function diag(kind, obj) {
+  try {
+    const payload = Object.assign(
+      { kind, t: Date.now() / 1000, seq: ++_diagSeq, src: "page" }, obj || {});
+    fetch("/diag", {
+      method: "POST", keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  } catch (e) { /* diagnostics must never throw into a frame */ }
+}
+addEventListener("securitypolicyviolation", (e) => diag("csp-violation", {
+  blockedURI: e.blockedURI, violatedDirective: e.violatedDirective,
+  effectiveDirective: e.effectiveDirective, sourceFile: e.sourceFile,
+  lineNumber: e.lineNumber, disposition: e.disposition,
+}));
+addEventListener("error", (e) => diag("error", {
+  msg: e.message || String(e), src: e.filename, line: e.lineno, col: e.colno,
+  stack: (e.error && e.error.stack) ? String(e.error.stack).slice(0, 800) : null,
+}));
+addEventListener("unhandledrejection", (e) => diag("unhandledrejection", {
+  msg: String((e.reason && (e.reason.stack || e.reason.message)) || e.reason).slice(0, 800),
+}));
+(function bootProbe() {
+  let moduleWorker = false, mwErr = null;
+  try {
+    const u = URL.createObjectURL(new Blob(["/*probe*/"], { type: "text/javascript" }));
+    const w = new Worker(u, { type: "module" });
+    w.terminate(); URL.revokeObjectURL(u); moduleWorker = true;
+  } catch (e) { mwErr = String(e); }
+  let webgl2 = false;
+  try { webgl2 = !!document.createElement("canvas").getContext("webgl2"); } catch (e) {}
+  diag("boot-probe", {
+    ua: navigator.userAgent,
+    href: location.href,
+    secureContext: window.isSecureContext,
+    crossOriginIsolated: window.crossOriginIsolated,
+    moduleWorker, moduleWorkerErr: mwErr,
+    createImageBitmap: typeof createImageBitmap === "function",
+    offscreenCanvas: typeof OffscreenCanvas === "function",
+    wasm: typeof WebAssembly === "object",
+    wasmSIMD: (() => { try {
+      // minimal SIMD-op module; throws to compile if unsupported
+      return WebAssembly.validate(new Uint8Array([
+        0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]));
+    } catch (e) { return false; } })(),
+    webgl2,
+    deviceMemory: navigator.deviceMemory || null,
+    hardwareConcurrency: navigator.hardwareConcurrency || null,
+    dpr: window.devicePixelRatio,
+    facemeshMode: FACEMESH_MODE, facemeshDelegate: FACEMESH_DELEGATE,
+  });
+})();
+
+// Can the PHONE'S browser actually reach the 3 MediaPipe URLs? (The
+// server's selftest proves the server can -- the phone goes through the
+// Codespaces proxy and may not.) Reported as its own event.
+(async function cdnReach() {
+  const urls = {
+    module: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs",
+    wasm: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/vision_wasm_internal.js",
+    wasmBin: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/vision_wasm_internal.wasm",
+    model: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+  };
+  const out = {};
+  await Promise.all(Object.entries(urls).map(async ([k, u]) => {
+    try {
+      const r = await fetch(u, { method: "GET", headers: { Range: "bytes=0-0" } });
+      out[k] = r.status + (r.headers.get("content-type") ? " " + r.headers.get("content-type") : "");
+    } catch (e) { out[k] = "FETCH-FAIL " + String((e && e.message) || e); }
+  }));
+  diag("cdn-reach", out);
+})();
+
+// hand-pipeline heartbeat + the always-visible on-screen status strip
+// (real DOM, fixed top -- the canvas-drawn status kept landing where a
+// phone couldn't see it). `?diag=0` hides the strip; /diag still gets
+// everything either way.
+let _everSawHand = false, _lastHandsBeat = 0;
+let _diagStripEl = null, _lastStripAt = 0;
+function updateDiagStrip(nowMs) {
+  if (nowMs - _lastStripAt < 250) return;
+  _lastStripAt = nowMs;
+  if (!_diagStripEl) {
+    if (!document.body) return;
+    _diagStripEl = document.createElement("div");
+    _diagStripEl.id = "diagStrip";
+    _diagStripEl.style.cssText =
+      "position:fixed;left:0;right:0;top:0;z-index:2147483647;" +
+      "font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;" +
+      "background:rgba(0,0,0,.6);color:#8ff0e4;padding:2px 6px;" +
+      "pointer-events:none;white-space:pre;letter-spacing:.02em";
+    document.body.appendChild(_diagStripEl);
+  }
+  const fe = faceMeshErr ? ("ERR " + faceMeshErr) : faceMeshStatus;
+  _diagStripEl.textContent =
+    `hands:${landmarker ? "ok" : "—"} ${fps}fps` +
+    `  |  faceMesh[${_fmMode}/${_fmDelegate}]:${fe}` +
+    `  f${faceMeshFrames}/r${faceMeshResults}`;
+  _diagStripEl.style.color = faceMeshErr ? "#ff9a9a" : "#8ff0e4";
+}
 
 // modes: ?mode=mirror (default, self-view) | overlay (transparent — OBS
 // browser sources can't open cameras reliably on macOS, kept for browsers
@@ -704,6 +822,7 @@ skelBtn.addEventListener("click", () => {
   // you throw the pose. D still toggles it independently if wanted.
   dbg.style.display = SKEL_ON ? "block" : "none";
   if (!SKEL_ON) skelCtx.clearRect(0, 0, skelCv.width, skelCv.height);
+  syncFaceDetector();   // bring the face model up/down with the overlay
 });
 // GAME (2026-09-03, Luis's call): rock-paper-scissors used to fire from
 // an always-listening pose -- too easy to trip. Now it's an explicit
@@ -858,12 +977,10 @@ document.getElementById("settingsSave").addEventListener("click", async () => {
   // the source of truth (not "did shush change"), so this also covers
   // the very first SAVE of a session where shush was already true from
   // a prior config on disk but nothing has loaded yet.
-  if (patch.shush && !faceDetector) {
-    createFaceDetector().then(fd => { faceDetector = fd; });
-  } else if (!patch.shush && faceDetector) {
-    try { faceDetector.close(); } catch (e) {}
-    faceDetector = null; mouthPt = null; faceSpan = 0;
-  }
+  // face model loads/closes with either the SHUSH checkbox or the
+  // SKELETON overlay -- syncFaceDetector reads the fresh CFG.gestures
+  // set just above plus the live SKEL_ON.
+  syncFaceDetector();
   settingsStatus.textContent = "saving…";
   try {
     const r = await fetch("/config", {
@@ -1198,17 +1315,253 @@ let lastDetectAt = 0;   // watchdog: see the cam.currentTime stall note in frame
 // forced the body-outline segmenter out (GPU contention read as
 // whole-app choppiness -- see barehands.md "Known dead ends"). Kept
 // cheap on purpose: BlazeFace short-range (a bounding box + 6 keypoints,
-// ~1-2ms) NOT the 478-point FaceLandmarker, pinned to the CPU/WASM
-// delegate so it never touches HandLandmarker's GPU path, and only run
-// once every FACE_EVERY_MS since a mouth barely moves frame to frame.
-// mouthPt is normalized to the FULL cam frame (same space as a hand
-// landmark), null when no face is seen. It DID still stutter on a real
-// phone (2026-09-04, 12fps report) even at that cost, so it's no longer
-// created at boot -- it loads (and closes) only in lockstep with the
-// SHUSH toggle in Settings, see settingsSave below. Off by omission
-// costs nothing; on costs the ~1-2ms/200ms above, opted into on request.
+// ~1-2ms), pinned to the CPU/WASM delegate so it never touches
+// HandLandmarker's GPU path, and only run once every FACE_EVERY_MS since
+// a mouth barely moves frame to frame. mouthPt is normalized to the FULL
+// cam frame (same space as a hand landmark), null when no face is seen.
+// It DID still stutter on a real phone (2026-09-04, 12fps report) even
+// at that cost, so it's no longer created at boot -- it loads (and
+// closes) only in lockstep with the SHUSH toggle in Settings OR the
+// SKELETON overlay (see syncFaceDetector). Off by omission costs
+// nothing; on costs the ~1-2ms/200ms above, opted into on request.
+// This model is now SHUSH-only: the SKELETON view's face render is the
+// full 478-point mesh below, which runs in a Worker.
 let faceDetector = null, lastFaceAt = 0, mouthPt = null, faceSpan = 0;
 const FACE_EVERY_MS = 200;
+
+// FACE MESH (2026-09-09, Luis's ask -- "closest to ARKit face
+// tracking"): the 478-point MediaPipe FaceLandmarker + its 52 ARKit
+// blendshapes + a 4x4 head-pose matrix. SKELETON-view only, throttled
+// to FACE_MESH_EVERY_MS.
+//
+// The plan was a Web Worker (off the render thread -- this is the model
+// the FACE DETECTOR note above refused to run inline). It DOESN'T WORK
+// in a worker: tasks-vision 0.10.14's createFromOptions touches
+// `document`, which a worker has no access to -> "Can't find variable:
+// document" (confirmed on iOS WebKit via /diag, 2026-09-09). So it runs
+// on the MAIN THREAD instead, GPU delegate. The auto-fallback LADDER
+// below tries main/gpu -> main/cpu -> worker/gpu -> worker/cpu and
+// stops at the first rung that returns a real face; on iOS that's
+// rung 0 (main/gpu). Costs ~5-10 fps with hands up -- opted into by
+// pressing SKELETON, off otherwise.
+//
+// The worker path + its face-mesh-worker.js are kept wired (later ladder
+// rungs) for a future MediaPipe that fixes worker support, or a
+// platform where the main thread is the one that fails.
+// Landmarks are normalized to the cam frame, so toScreen maps them
+// exactly like a hand landmark. The worker (when used) gets a
+// downscaled canvas -> createImageBitmap (from a CANVAS, reliable on
+// iOS, unlike from a <video>) -> transferred in; faceMeshBusy is a
+// single-inflight guard so a slow inference only skips ticks.
+let faceMeshWorker = null, faceMeshMain = null, faceMeshLm = null,
+    faceMeshBlend = null, faceMeshPose = null, faceMeshBusy = false,
+    lastFaceMeshAt = 0, faceMeshErr = null, faceMeshReady = false,
+    faceMeshStatus = "off", faceMeshFrames = 0, faceMeshResults = 0,
+    faceMeshTs = 0;
+const FACE_MESH_EVERY_MS = 200;
+const FACE_MESH_MAXDIM = 480;   // downscale the frame we hand the model
+const FACE_MESH_MODEL =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const FACE_MESH_WASM =
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const faceCapCv = document.createElement("canvas");
+const faceCapCtx = faceCapCv.getContext("2d", { willReadFrequently: true });
+
+// AUTO-FALLBACK LADDER: the 478-pt model's createFromOptions is fragile
+// on iOS WebKit -- worker vs main thread and CPU vs GPU delegate each
+// fail differently. Rather than make Luis reload 4 times, one SKELETON
+// press walks this ladder until one rung produces a real result, and
+// every attempt + failure is on /diag. An explicit ?facemesh=/
+// ?facemesh-delegate= pins one rung (no laddering).
+const FACEMESH_PINNED = _Q0.has("facemesh") || _Q0.has("facemesh-delegate");
+const FACEMESH_LADDER = FACEMESH_PINNED
+  ? [{ mode: FACEMESH_MODE, delegate: FACEMESH_DELEGATE }]
+  : [
+      // main/gpu is the only combo that works on iOS WebKit with
+      // tasks-vision 0.10.14 (the worker path can't see `document`).
+      { mode: "main", delegate: "gpu" },
+      { mode: "main", delegate: "cpu" },
+      { mode: "worker", delegate: "gpu" },
+      { mode: "worker", delegate: "cpu" },
+    ];
+let _fmRung = -1, _fmMode = FACEMESH_MODE, _fmDelegate = FACEMESH_DELEGATE;
+
+// single choke point for the mesh's status -- keeps the on-screen strip,
+// the dbg HUD and the /diag stream all reading the same truth.
+function setFaceMeshState(state, detail, extra) {
+  faceMeshStatus = detail ? (state + " — " + detail) : state;
+  diag("facemesh-state", Object.assign({
+    state, detail: detail || null, mode: _fmMode, delegate: _fmDelegate,
+    rung: _fmRung, ready: faceMeshReady, busy: faceMeshBusy,
+    frames: faceMeshFrames, results: faceMeshResults, err: faceMeshErr || null,
+  }, extra || {}));
+}
+
+// a rung failed -> tear it down and try the next, or give up.
+function faceMeshRungFailed(why) {
+  diag("facemesh-ladder", { rung: _fmRung, mode: _fmMode, delegate: _fmDelegate, failed: why });
+  stopFaceMeshWorker(); stopFaceMeshMain();
+  faceMeshReady = false; faceMeshBusy = false;
+  if (!SKEL_ON) return;                       // toggled off mid-attempt
+  if (_fmRung + 1 >= FACEMESH_LADDER.length) {
+    setFaceMeshState("error", "all " + FACEMESH_LADDER.length + " configs failed — see /diag?html=1");
+    return;
+  }
+  startFaceMeshRung(_fmRung + 1);
+}
+
+function startFaceMeshRung(i) {
+  _fmRung = i;
+  const step = FACEMESH_LADDER[i];
+  _fmMode = step.mode; _fmDelegate = step.delegate;
+  faceMeshFrames = 0; faceMeshResults = 0; faceMeshLm = null; faceMeshErr = null;
+  faceMeshReady = false; faceMeshBusy = false; lastFaceMeshAt = 0;
+  diag("facemesh-ladder", { rung: i, mode: _fmMode, delegate: _fmDelegate, start: true });
+  if (_fmMode === "main") startFaceMeshMain(_fmDelegate);
+  else startFaceMeshWorker(_fmDelegate);
+}
+
+// ---- worker path -----------------------------------------------------
+function startFaceMeshWorker(delegate) {
+  setFaceMeshState("loading model", "worker/" + delegate);
+  try {
+    faceMeshWorker = new Worker(
+      "face-mesh-worker.js?delegate=" + encodeURIComponent(delegate),
+      { type: "module" });
+    faceMeshWorker.onmessage = (ev) => {
+      const d = ev.data || {};
+      if (d.diag) { diag("facemesh-worker", d.diag); return; }
+      if (d.ok === false) {
+        faceMeshErr = d.err || "init failed";
+        faceMeshRungFailed(faceMeshErr); return;
+      }
+      if (d.ready) {
+        faceMeshReady = true;
+        setFaceMeshState("ready", "waiting for face (worker/" + delegate + ")");
+        return;
+      }
+      faceMeshFrames = d.frames || faceMeshFrames;
+      if (d.lm) {
+        faceMeshResults++;
+        faceMeshLm = d.lm; faceMeshBlend = d.blend; faceMeshPose = d.pose;
+        faceMeshErr = null;
+        if (faceMeshResults === 1 || faceMeshStatus.indexOf("tracking") !== 0)
+          setFaceMeshState("tracking", (d.lm.length / 3) + " pts worker/" + delegate);
+      } else {
+        faceMeshBlend = null; faceMeshPose = null;
+        if (faceMeshStatus.indexOf("tracking") !== 0)
+          setFaceMeshState(d.warn ? "frame warn" : "no face in frame", d.warn || null);
+      }
+      faceMeshBusy = false;
+    };
+    faceMeshWorker.onerror = (e) => {
+      faceMeshRungFailed("worker onerror: " +
+        ((e && e.message) || "load failed (module worker?)") +
+        (e && e.filename ? " @" + e.filename + ":" + e.lineno : ""));
+    };
+    diag("facemesh-worker", { at: "constructed", delegate });
+  } catch (e) {
+    faceMeshRungFailed("Worker ctor: " + String((e && e.message) || e));
+  }
+}
+function stopFaceMeshWorker() {
+  if (faceMeshWorker) { try { faceMeshWorker.terminate(); } catch (e) {} }
+  faceMeshWorker = null;
+}
+
+// ---- main-thread path ----------------------------------------------
+async function startFaceMeshMain(delegate) {
+  setFaceMeshState("loading model", "main/" + delegate);
+  try {
+    const fileset = await FilesetResolver.forVisionTasks(FACE_MESH_WASM);
+    const inst = await FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: FACE_MESH_MODEL,
+        delegate: delegate === "gpu" ? "GPU" : "CPU",
+      },
+      runningMode: "VIDEO", numFaces: 1,
+      outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
+    });
+    if (!SKEL_ON) { try { inst.close(); } catch (e) {} return; }
+    faceMeshMain = inst;
+    faceMeshReady = true;
+    setFaceMeshState("ready", "waiting for face (main/" + delegate + ")");
+  } catch (e) {
+    faceMeshErr = String((e && (e.message || e.name)) || e) +
+      (e && e.stack ? " @" + String(e.stack).split("\n").slice(0, 3).join(" | ") : "");
+    faceMeshRungFailed("main create: " + faceMeshErr);
+  }
+}
+function stopFaceMeshMain() {
+  if (faceMeshMain) { try { faceMeshMain.close(); } catch (e) {} }
+  faceMeshMain = null;
+}
+// called from the frame loop while the active rung is a main-thread one
+function runFaceMeshMain(nowMs) {
+  if (!faceMeshMain || !faceMeshReady || !cam.videoWidth) return;
+  if (nowMs - lastFaceMeshAt < FACE_MESH_EVERY_MS) return;
+  lastFaceMeshAt = nowMs;
+  try {
+    faceMeshTs += 1; faceMeshFrames++;
+    const res = faceMeshMain.detectForVideo(cam, faceMeshTs * 40);
+    const face = res.faceLandmarks && res.faceLandmarks[0];
+    if (face && face.length) {
+      const lm = new Float32Array(face.length * 3);
+      for (let i = 0; i < face.length; i++) {
+        lm[i * 3] = face[i].x; lm[i * 3 + 1] = face[i].y; lm[i * 3 + 2] = face[i].z || 0;
+      }
+      faceMeshLm = lm; faceMeshResults++;
+      const bs = res.faceBlendshapes && res.faceBlendshapes[0];
+      faceMeshBlend = (bs && bs.categories)
+        ? bs.categories.map(c => ({ name: c.categoryName || c.displayName || "?", score: c.score }))
+            .filter(c => c.name !== "_neutral")
+        : null;
+      const mtx = res.facialTransformationMatrixes && res.facialTransformationMatrixes[0];
+      faceMeshPose = (mtx && mtx.data) ? new Float32Array(mtx.data) : null;
+      if (faceMeshResults === 1 || faceMeshStatus.indexOf("tracking") !== 0)
+        setFaceMeshState("tracking", (lm.length / 3) + " pts main/" + _fmDelegate);
+    } else {
+      faceMeshBlend = null; faceMeshPose = null;
+      if (faceMeshStatus.indexOf("tracking") !== 0 && faceMeshStatus.indexOf("no face") !== 0)
+        setFaceMeshState("no face in frame");
+    }
+  } catch (e) {
+    faceMeshErr = String((e && e.message) || e);
+    setFaceMeshState("error", "detect: " + faceMeshErr);
+  }
+}
+
+function startFaceMesh() {
+  faceMeshFrames = 0; faceMeshResults = 0; faceMeshLm = null;
+  if (FACEMESH_MODE === "off") { setFaceMeshState("disabled", "?facemesh=off"); return; }
+  startFaceMeshRung(0);
+}
+function stopFaceMesh() {
+  stopFaceMeshWorker(); stopFaceMeshMain();
+  faceMeshLm = null; faceMeshBlend = null; faceMeshPose = null;
+  faceMeshBusy = false; faceMeshErr = null; faceMeshReady = false;
+  faceMeshStatus = "off"; _fmRung = -1;
+}
+
+// Two independent face models, both lazy, both opt-in, never at boot:
+//   - BlazeFace (faceDetector) loads while the SHUSH gesture is enabled
+//   - the 478-point mesh (worker, or main thread via ?facemesh=main)
+//     loads while SKELETON is on
+// Called from the SKELETON toggle and from settingsSave (the SHUSH
+// checkbox); each gate owns its own model so neither can tear the
+// other's out from under it.
+function syncFaceDetector() {
+  const wantBlaze = !!(CFG.gestures && CFG.gestures.shush);
+  if (wantBlaze && !faceDetector) {
+    createFaceDetector().then(fd => { faceDetector = fd; });
+  } else if (!wantBlaze && faceDetector) {
+    try { faceDetector.close(); } catch (e) {}
+    faceDetector = null; mouthPt = null; faceSpan = 0;
+  }
+  const meshUp = faceMeshWorker || faceMeshMain || _fmRung >= 0;
+  if (SKEL_ON && !meshUp) { diag("facemesh-state", { state: "start-requested", ladder: FACEMESH_LADDER.length }); startFaceMesh(); }
+  else if (!SKEL_ON && meshUp) { stopFaceMesh(); diag("facemesh-state", { state: "stopped" }); }
+}
 
 // low-light assist: MediaPipe reads raw pixels, so a CSS filter on <video>
 // (display-only) does nothing for tracking — this actually redraws the
@@ -3340,6 +3693,99 @@ function drawSkeleton(res) {
       skelCtx.fillText(`z ${axisLm.z.toFixed(3)}`, midX - zLen * 0.7 - 46, midY - zLen * 0.7 - 4);
     }
   });
+
+  // FACE MESH OVERLAY (2026-09-09, Luis's ask -- as close to ARKit face
+  // tracking as a browser gets): the 478-point MediaPipe FaceLandmarker
+  // mesh, computed off-thread in face-mesh-worker.js. Drawn as ONE
+  // batched path -- FACE_LANDMARKS_TESSELATION is ~2600 edges, all
+  // moveTo/lineTo into a single stroke() -- with every screen point
+  // projected exactly once up front. The named features are marked on
+  // top so you can still tell your nose from your mouth, plus a live
+  // readout of the ARKit blendshapes firing and the head pose. SKEL_ON
+  // only; DARK stays a clean hand-only skeleton for filming. Landmarks
+  // are full-frame normalized (worker gets the whole cam bitmap), so
+  // toScreen maps them like a hand landmark, mirror included.
+  if (SKEL_ON) {
+    // always-on one-liner: shows exactly where the mesh pipeline is
+    // (off / loading model / ready / tracking / no face / error).
+    skelCtx.font = "11px 'SF Mono', Menlo, monospace";
+    skelCtx.fillStyle = faceMeshErr ? "rgba(255,150,150,0.92)" : "rgba(143,240,228,0.72)";
+    skelCtx.fillText("mesh: " + (faceMeshErr || faceMeshStatus), 8, skelCv.height - 110);
+  }
+  const _fmN = faceMeshLm ? faceMeshLm.length / 3 : 0;
+  if (SKEL_ON && _fmN >= 468) {
+    const L = faceMeshLm;
+    // project all points once -- shared by the mesh, the feature marks
+    // and the midpoints below (each vertex is in ~6 tessellation edges).
+    const pts = new Array(_fmN);
+    for (let i = 0; i < _fmN; i++) pts[i] = toScreen({ x: L[i * 3], y: L[i * 3 + 1] });
+    const midS = (i, j) => ({ x: (pts[i].x + pts[j].x) / 2, y: (pts[i].y + pts[j].y) / 2 });
+
+    // the mesh -- one path, one stroke, hairline + low alpha so it reads
+    // as a surface and not a wall of lines.
+    const TESS = (FaceLandmarker && FaceLandmarker.FACE_LANDMARKS_TESSELATION) || [];
+    skelCtx.strokeStyle = "rgba(143,240,228,0.22)";
+    skelCtx.lineWidth = 0.6;
+    skelCtx.beginPath();
+    for (let i = 0; i < TESS.length; i++) {
+      const a = pts[TESS[i].start], b = pts[TESS[i].end];
+      if (!a || !b) continue;
+      skelCtx.moveTo(a.x, a.y); skelCtx.lineTo(b.x, b.y);
+    }
+    skelCtx.stroke();
+
+    // named feature marks. Canonical FaceMesh indices; mirror-aware
+    // labels (same R/L flip drawSkeleton uses for hands) since #cam is a
+    // selfie view. nose + mouth also print raw normalized coords so a
+    // face-anchored gesture can be fitted off real numbers.
+    const FEAT = [
+      { p: midS(33, 133),  label: "eyeL" },
+      { p: midS(263, 362), label: "eyeR" },
+      { p: pts[1],         label: "nose",  norm: { x: L[3], y: L[4] } },
+      { p: midS(13, 14),   label: "mouth", norm: { x: (L[13*3] + L[14*3]) / 2, y: (L[13*3+1] + L[14*3+1]) / 2 } },
+      { p: pts[234],       label: "earL" },
+      { p: pts[454],       label: "earR" },
+    ];
+    skelCtx.fillStyle = "#8ff0e4";
+    FEAT.forEach(f => {
+      if (!f.p) return;
+      skelCtx.beginPath();
+      skelCtx.arc(f.p.x, f.p.y, 3, 0, Math.PI * 2);
+      skelCtx.fill();
+    });
+    skelCtx.font = "11px 'SF Mono', Menlo, monospace";
+    FEAT.forEach(f => {
+      if (!f.p) return;
+      skelCtx.fillStyle = "rgba(143,240,228,0.9)";
+      skelCtx.fillText(f.label, f.p.x + 7, f.p.y - 5);
+      if (f.norm) {
+        skelCtx.fillStyle = "rgba(143,240,228,0.5)";
+        skelCtx.fillText(`(${f.norm.x.toFixed(2)},${f.norm.y.toFixed(2)})`, f.p.x + 7, f.p.y + 8);
+      }
+    });
+
+    // readout: head pose (approx Euler off the 4x4, column-major) + the
+    // ARKit blendshapes currently firing. Bottom-left of the skel canvas.
+    skelCtx.font = "11px 'SF Mono', Menlo, monospace";
+    skelCtx.fillStyle = "rgba(143,240,228,0.8)";
+    let ry = skelCv.height - 96;
+    if (faceMeshPose && faceMeshPose.length >= 11) {
+      const m = faceMeshPose;
+      const yaw   = Math.atan2(m[8], m[10]) * 180 / Math.PI;
+      const pitch = Math.asin(Math.max(-1, Math.min(1, -m[9]))) * 180 / Math.PI;
+      const roll  = Math.atan2(m[1], m[5]) * 180 / Math.PI;
+      skelCtx.fillText(`head  yaw ${yaw.toFixed(0)}°  pitch ${pitch.toFixed(0)}°  roll ${roll.toFixed(0)}°`, 8, ry);
+      ry += 14;
+    }
+    if (faceMeshBlend && faceMeshBlend.length) {
+      faceMeshBlend.filter(b => b.score > 0.15)
+        .sort((a, b) => b.score - a.score).slice(0, 5)
+        .forEach(b => {
+          skelCtx.fillText(`${b.name.padEnd(18)} ${b.score.toFixed(2)}`, 8, ry);
+          ry += 14;
+        });
+    }
+  }
 }
 
 let lastClearT = 0, lastResetT = 0;   // clear/reset cooldowns (wipe + clap)
@@ -4567,11 +5013,13 @@ async function boot() {
       lastRes = res;
 
       // THE SHUSH's mouth locator: throttled, CPU-delegate, best-effort.
-      // Runs on the SAME src frame the hand detector just used. Keypoint
-      // index 3 is BlazeFace's mouth centre; remapped through the same
-      // crop math as the hand landmarks above so mouthPt lands in
-      // full-frame normalized space. A throw here is swallowed -- a
-      // missed mouth read just means the shush can't arm this tick.
+      // Runs on the SAME src frame the hand detector just used, whenever
+      // SHUSH has the model loaded (SKELETON's face render is the mesh
+      // worker below now, not this). Keypoint index 3 is BlazeFace's
+      // mouth centre; remapped through the same crop math as the hand
+      // landmarks above so mouthPt lands in full-frame normalized space.
+      // A throw here is swallowed -- a missed read just means the shush
+      // can't arm this tick.
       if (faceDetector && CFG.gestures.shush && now - lastFaceAt > FACE_EVERY_MS) {
         lastFaceAt = now;
         try {
@@ -4599,6 +5047,58 @@ async function boot() {
           }
         } catch (e) { mouthPt = null; faceSpan = 0; }
       }
+
+      // FACE MESH: SKELETON-only, throttled to FACE_MESH_EVERY_MS.
+      //   ?facemesh=main -> inference runs inline here (bisect tool).
+      //   default        -> worker path: draw cam -> small canvas ->
+      //                     createImageBitmap(canvas) (reliable on iOS,
+      //                     unlike from a <video>) -> transfer to worker.
+      // faceMeshBusy is a single-inflight guard: a slow model only ever
+      // means skipped ticks, never a stalled frame.
+      if (SKEL_ON && _fmMode === "main") {
+        runFaceMeshMain(now);
+      } else if (SKEL_ON && faceMeshWorker && faceMeshReady && !faceMeshBusy &&
+          cam.videoWidth && now - lastFaceMeshAt > FACE_MESH_EVERY_MS) {
+        lastFaceMeshAt = now;
+        try {
+          const vw2 = cam.videoWidth, vh2 = cam.videoHeight;
+          const s = Math.min(1, FACE_MESH_MAXDIM / Math.max(vw2, vh2));
+          const dw = Math.max(2, Math.round(vw2 * s)), dh = Math.max(2, Math.round(vh2 * s));
+          if (faceCapCv.width !== dw || faceCapCv.height !== dh) {
+            faceCapCv.width = dw; faceCapCv.height = dh;
+          }
+          faceCapCtx.drawImage(cam, 0, 0, dw, dh);
+          faceMeshBusy = true;
+          faceMeshFrames++;
+          if (faceMeshFrames === 1) diag("facemesh-state", { state: "first-frame-capture" });
+          createImageBitmap(faceCapCv).then(bmp => {
+            if (!faceMeshWorker) { try { bmp.close(); } catch (e) {} faceMeshBusy = false; return; }
+            if (faceMeshFrames === 1) diag("facemesh-state", { state: "first-frame-sent" });
+            faceMeshWorker.postMessage({ bitmap: bmp, frames: faceMeshFrames }, [bmp]);
+          }).catch(e => {
+            faceMeshBusy = false;
+            faceMeshErr = "capture: " + String((e && e.message) || e);
+            setFaceMeshState("error", faceMeshErr);
+          });
+        } catch (e) {
+          faceMeshBusy = false;
+          faceMeshErr = "capture: " + String((e && e.message) || e);
+          setFaceMeshState("error", faceMeshErr);
+        }
+      }
+
+      // hand-pipeline heartbeat (every ~5s, independent of hands being
+      // in frame) + the on-screen diag strip.
+      if ((res.landmarks || []).length) _everSawHand = true;
+      if (now - _lastHandsBeat > 5000) {
+        _lastHandsBeat = now;
+        diag("hands-heartbeat", {
+          detectorOk: !!landmarker, fps, hands: (res.landmarks || []).length,
+          everSawHand: _everSawHand, skel: SKEL_ON, delegate: DELEGATE,
+          frame: frames,
+        });
+      }
+      if (DIAG_STRIP_ON) updateDiagStrip(now);
 
       // smooth every tracked hand ONCE, up front -- both the debug
       // skeleton/ghost overlay AND the gesture loop below read this
@@ -5552,6 +6052,7 @@ async function boot() {
             `\nsmooth p50 ${_smRing.pct(0.5).toFixed(0)} p99 ${_smRing.pct(0.99).toFixed(0)}us` +
             ` · kf p50 ${_kfRing.pct(0.5).toFixed(0)} p99 ${_kfRing.pct(0.99).toFixed(0)}us` +
             ` · coast ${COAST_ON ? "ON " + _coastRate + "/s" : "off"}` +
+            `\nmesh: ${faceMeshErr || faceMeshStatus}` +
             `\n${cur.fpDbg || ""}` + (SAMPLED ? `\n${SAMPLED}` : "");
         }
       });
