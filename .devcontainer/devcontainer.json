@@ -1,0 +1,40 @@
+{
+  "name": "Jarvis",
+  // The Universal image is what this stack has always run on (stock GitHub
+  // Codespaces default): Node 22, Python 3.12, g++, gh, and git are all
+  // already present, so install-prereqs.sh mostly self-skips.
+  "image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+
+  "features": {
+    // uv (jarvis-voice + gesture-classifier venvs) isn't in the base image.
+    "ghcr.io/va-h/devcontainers-features/uv:1": {}
+  },
+
+  // Runs once when the container is created. install-prereqs.sh is idempotent
+  // and non-interactive (system packages, gh, claude CLI). bootstrap.sh is
+  // deliberately NOT run here: it prompts for secrets (vault token, Spotify,
+  // Hubspace, ...) and needs a real terminal. Run it by hand after create:
+  //   bash scripts/bootstrap.sh
+  "onCreateCommand": "bash scripts/install-prereqs.sh || true",
+
+  // ai-visualizer 8790, jarvis-voice 8791 (internal), barehands 8794,
+  // next-app dev server 3000.
+  "forwardPorts": [3000, 8790, 8794],
+  "portsAttributes": {
+    "3000": { "label": "next-app (Site Analyzer)" },
+    "8790": { "label": "ai-visualizer (Jarvis Face)" },
+    "8794": { "label": "barehands (glass board)" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "timonwong.shellcheck"
+      ]
+    }
+  }
+}
