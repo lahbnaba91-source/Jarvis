@@ -133,6 +133,33 @@ function canopyKind(tags: Record<string, string>): CanopyKind {
   return "scrub"
 }
 
+function parseTrees(nodes: OverpassNode[]): TreePoint[] {
+  return nodes
+    .filter((n) => n.tags.natural === "tree")
+    .map((n) => {
+      const tagged = Number.parseFloat(n.tags.height ?? "")
+      return Number.isFinite(tagged) && tagged > 0
+        ? { id: n.id, lat: n.lat, lon: n.lon, heightM: tagged, heightSource: "tag" as const }
+        : {
+            id: n.id,
+            lat: n.lat,
+            lon: n.lon,
+            heightM: DEFAULT_TREE_HEIGHT_M,
+            heightSource: "estimate" as const,
+          }
+    })
+}
+
+function parseCanopies(ways: OverpassWay[]): CanopyArea[] {
+  return ways
+    .filter(
+      (w) =>
+        w.geometry.length >= 3 &&
+        (CANOPY_TAGS.has(w.tags.natural ?? "") || w.tags.landuse === "forest"),
+    )
+    .map((w) => ({ id: w.id, kind: canopyKind(w.tags), geometry: w.geometry }))
+}
+
 export interface SiteOsm {
   /** Highway ways, unsorted. */
   roads: OverpassWay[]
@@ -171,30 +198,45 @@ out geom;`
     .sort((a, b) => a.dist - b.dist)
     .map(({ way }) => way)
 
-  const trees: TreePoint[] = nodes
-    .filter((n) => n.tags.natural === "tree")
-    .map((n) => {
-      const tagged = Number.parseFloat(n.tags.height ?? "")
-      return Number.isFinite(tagged) && tagged > 0
-        ? { id: n.id, lat: n.lat, lon: n.lon, heightM: tagged, heightSource: "tag" as const }
-        : {
-            id: n.id,
-            lat: n.lat,
-            lon: n.lon,
-            heightM: DEFAULT_TREE_HEIGHT_M,
-            heightSource: "estimate" as const,
-          }
-    })
+  return { roads, buildings, trees: parseTrees(nodes), canopies: parseCanopies(ways) }
+}
 
-  const canopies: CanopyArea[] = ways
-    .filter(
-      (w) =>
-        w.geometry.length >= 3 &&
-        (CANOPY_TAGS.has(w.tags.natural ?? "") || w.tags.landuse === "forest"),
-    )
-    .map((w) => ({ id: w.id, kind: canopyKind(w.tags), geometry: w.geometry }))
+export interface ViewportOsm {
+  roads: OverpassWay[]
+  trees: TreePoint[]
+  canopies: CanopyArea[]
+}
 
-  return { roads, buildings, trees, canopies }
+/** Roads + trees + canopy for whatever the camera is currently looking at —
+ * called on every camera move-end so the map keeps filling in as you pan and
+ * zoom, instead of freezing at the search pin's radius. Buildings are left out
+ * on purpose: the 3D OSM Buildings tileset is global and already renders
+ * everything in frame. Trees use a tighter radius than roads — they're far
+ * heavier per entity. */
+export async function fetchViewportOsm(
+  center: LatLon,
+  radiusM: number,
+): Promise<ViewportOsm> {
+  const { lat, lon } = center
+  const r = Math.max(150, Math.round(radiusM))
+  const treeR = Math.min(r, 400)
+  const query = `[out:json][timeout:30];
+(
+  way["highway"](around:${r},${lat},${lon});
+  node["natural"="tree"](around:${treeR},${lat},${lon});
+  way["natural"="wood"](around:${r},${lat},${lon});
+  way["landuse"="forest"](around:${r},${lat},${lon});
+  way["natural"="tree_row"](around:${treeR},${lat},${lon});
+  way["natural"="scrub"](around:${r},${lat},${lon});
+);
+out geom;`
+
+  const { ways, nodes } = await runOverpassElements(query)
+  return {
+    roads: ways.filter((w) => w.tags.highway),
+    trees: parseTrees(nodes),
+    canopies: parseCanopies(ways),
+  }
 }
 
 function distanceToRingMeters(point: LatLon, ring: LatLon[]): number {

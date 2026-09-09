@@ -1,25 +1,31 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { ChevronUp, Ruler, Search, Share2, X } from "lucide-react"
+import { ChevronUp, Map as MapIcon, Ruler, Search, Share2, Signpost, X } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import type { CesiumSceneHandle } from "@/components/site/cesium-scene"
+import type { CesiumSceneHandle, PickedBuilding } from "@/components/site/cesium-scene"
 import { geocodeAddress, type GeocodeResult } from "@/lib/site/geocode"
 import {
   analyzeBuildingFootprint,
+  summarizeBuildings,
   summarizeCanopy,
   summarizeRoads,
+  BUILDING_COLOUR_LEGEND,
+  ROAD_COLOUR_LEGEND,
+  type BuildingCensusEntry,
   type BuildingProfile,
   type CanopySummary,
   type NearbyRoad,
 } from "@/lib/site/geometry"
 import {
   fetchSiteOsm,
+  fetchViewportOsm,
   type CanopyArea,
   type LatLon,
   type OverpassWay,
   type TreePoint,
+  type ViewportOsm,
 } from "@/lib/site/overpass"
 import { bearingToCompass, estimateFacadeExposures, getDaylightSummary } from "@/lib/site/solar"
 import { cn } from "@/lib/utils"
@@ -41,6 +47,7 @@ const ION_TOKEN = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN || null
 const EMPTY_ROADS: OverpassWay[] = []
 const EMPTY_TREES: TreePoint[] = []
 const EMPTY_CANOPIES: CanopyArea[] = []
+const EMPTY_CENSUS: BuildingCensusEntry[] = []
 
 interface SiteData {
   target: LatLon
@@ -49,6 +56,8 @@ interface SiteData {
   canopies: CanopyArea[]
   building: BuildingProfile | null
   buildingRing: LatLon[] | null
+  buildingCount: number
+  buildingCensus: BuildingCensusEntry[]
 }
 
 function todayISODate(): string {
@@ -99,6 +108,20 @@ export default function SitePageClient() {
   const [lastMeasurement, setLastMeasurement] = useState<number | null>(null)
   const [copiedShare, setCopiedShare] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(true)
+  const [showRoadLabels, setShowRoadLabels] = useState(false)
+  const [showRoadMap, setShowRoadMap] = useState(true)
+  const [pickedBuilding, setPickedBuilding] = useState<PickedBuilding | null>(null)
+
+  // Viewport-driven OSM: as the camera roams this accumulates roads/trees/canopy
+  // tile by tile (never discarding, capped by distance) and overrides the pin's
+  // set for rendering. The analysis panel stays on the pin.
+  const [viewportOsm, setViewportOsm] = useState<ViewportOsm | null>(null)
+  const [viewportLoading, setViewportLoading] = useState(false)
+  const lastViewFetchRef = useRef<{ lat: number; lon: number; radius: number; at: number } | null>(
+    null,
+  )
+  const viewCacheRef = useRef<Map<string, ViewportOsm>>(new Map())
+  const viewReqIdRef = useRef(0)
 
   // The instant driving the 3D scene's clock/shadows.
   const date = useMemo(() => {
@@ -137,6 +160,8 @@ export default function SitePageClient() {
           canopies: osm.canopies,
           building: nearest ? analyzeBuildingFootprint(nearest) : null,
           buildingRing: nearest ? nearest.geometry : null,
+          buildingCount: osm.buildings.length,
+          buildingCensus: summarizeBuildings(osm.buildings),
         })
         setSiteDataError(null)
       } catch (err) {
@@ -158,7 +183,15 @@ export default function SitePageClient() {
   const roads = currentSiteData?.roads ?? EMPTY_ROADS
   const trees = currentSiteData?.trees ?? EMPTY_TREES
   const canopies = currentSiteData?.canopies ?? EMPTY_CANOPIES
+
+  // What the 3D scene actually draws: the roaming viewport pull once we have
+  // one, otherwise the initial pin-centred pull.
+  const renderRoads = viewportOsm?.roads ?? roads
+  const renderTrees = viewportOsm?.trees ?? trees
+  const renderCanopies = viewportOsm?.canopies ?? canopies
   const buildingRing = currentSiteData?.buildingRing ?? null
+  const buildingCount = currentSiteData?.buildingCount ?? 0
+  const buildingCensus = currentSiteData?.buildingCensus ?? EMPTY_CENSUS
 
   const nearbyRoads: NearbyRoad[] = useMemo(
     () => (currentSiteData ? summarizeRoads(currentSiteData.roads, currentSiteData.target) : []),
@@ -201,6 +234,10 @@ export default function SitePageClient() {
     setTarget({ lat: result.lat, lon: result.lon })
     setSearchResults([])
     setAddressQuery(result.displayName)
+    setPickedBuilding(null)
+    setLastMeasurement(null)
+    setViewportOsm(null)
+    lastViewFetchRef.current = null
   }, [])
 
   const handleShare = useCallback(() => {
@@ -208,6 +245,52 @@ export default function SitePageClient() {
       setCopiedShare(true)
       setTimeout(() => setCopiedShare(false), 2000)
     })
+  }, [])
+
+  // Called on every camera settle. Pulls roads/trees for the new view and
+  // merges them into the accumulated set, with guards so panning around doesn't
+  // hammer Overpass. radiusM === 0 means we're zoomed too far for useful
+  // centrelines — the flat citywide road tiles carry it from there.
+  const handleViewChange = useCallback((center: LatLon, radiusM: number) => {
+    if (radiusM === 0) return
+
+    const last = lastViewFetchRef.current
+    if (last) {
+      const moved = roughMeters(last.lat, last.lon, center.lat, center.lon)
+      const zoomChange = Math.abs(radiusM - last.radius) / last.radius
+      // Haven't moved far and roughly the same zoom — this view's already loaded.
+      if (moved < radiusM * 0.4 && zoomChange < 0.4) return
+      // No faster than one fetch every 2s.
+      if (Date.now() - last.at < 2000) return
+    }
+
+    const key = `${center.lat.toFixed(3)},${center.lon.toFixed(3)},${Math.round(radiusM / 150)}`
+    lastViewFetchRef.current = { lat: center.lat, lon: center.lon, radius: radiusM, at: Date.now() }
+
+    const cached = viewCacheRef.current.get(key)
+    if (cached) {
+      setViewportOsm((prev) => mergeAccumulated(prev, cached, center))
+      return
+    }
+
+    const reqId = ++viewReqIdRef.current
+    setViewportLoading(true)
+    void fetchViewportOsm(center, radiusM)
+      .then((osm) => {
+        viewCacheRef.current.set(key, osm)
+        if (viewCacheRef.current.size > 80) {
+          viewCacheRef.current.delete(viewCacheRef.current.keys().next().value as string)
+        }
+        // Merge is order-independent, so out-of-order fetches are all fine.
+        setViewportOsm((prev) => mergeAccumulated(prev, osm, center))
+      })
+      .catch((err) => {
+        // Keep whatever's already drawn — exploration shouldn't throw errors at you.
+        console.warn("[site] viewport OSM fetch failed:", err)
+      })
+      .finally(() => {
+        if (reqId === viewReqIdRef.current) setViewportLoading(false)
+      })
   }, [])
 
   return (
@@ -219,12 +302,16 @@ export default function SitePageClient() {
           ionToken={ION_TOKEN}
           target={target}
           date={date}
-          roads={roads}
-          trees={trees}
-          canopies={canopies}
+          roads={renderRoads}
+          trees={renderTrees}
+          canopies={renderCanopies}
           buildingHighlight={buildingRing}
           measurementMode={measurementMode}
           onMeasurement={setLastMeasurement}
+          showRoadLabels={showRoadLabels}
+          onBuildingPick={setPickedBuilding}
+          onViewChange={handleViewChange}
+          showRoadMap={showRoadMap}
         />
         {!target && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8 text-center text-sm text-muted-foreground">
@@ -235,6 +322,13 @@ export default function SitePageClient() {
           <div className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center px-4">
             <span className="rounded-full bg-foreground/90 px-3 py-1 text-xs font-medium text-background shadow-lg">
               Tap two points in the scene
+            </span>
+          </div>
+        )}
+        {!measurementMode && target && viewportLoading && (
+          <div className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center px-4">
+            <span className="rounded-full bg-foreground/80 px-3 py-1 text-xs font-medium text-background shadow-lg">
+              Updating map…
             </span>
           </div>
         )}
@@ -342,6 +436,31 @@ export default function SitePageClient() {
             Clear
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => setShowRoadMap((s) => !s)}
+          aria-pressed={showRoadMap}
+          aria-label="Toggle citywide road map overlay"
+          className={cn(
+            "flex size-12 items-center justify-center rounded-full border bg-background/90 shadow-lg backdrop-blur",
+            showRoadMap && "border-foreground bg-foreground text-background",
+          )}
+        >
+          <MapIcon className="size-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowRoadLabels((s) => !s)}
+          aria-pressed={showRoadLabels}
+          aria-label="Toggle street name labels"
+          disabled={!target}
+          className={cn(
+            "flex size-12 items-center justify-center rounded-full border bg-background/90 shadow-lg backdrop-blur disabled:opacity-40",
+            showRoadLabels && "border-foreground bg-foreground text-background",
+          )}
+        >
+          <Signpost className="size-5" />
+        </button>
         <button
           type="button"
           onClick={handleShare}
@@ -460,7 +579,51 @@ export default function SitePageClient() {
                 />
               </dl>
             )}
+
+            {buildingCount > 0 && (
+              <div className="mt-3 border-t pt-2">
+                <p className="mb-1 text-xs text-muted-foreground">
+                  {buildingCount} mapped within 120 m
+                </p>
+                <ul className="space-y-0.5">
+                  {buildingCensus.map((c) => (
+                    <li key={c.label} className="flex justify-between gap-2">
+                      <span className="truncate">{c.label}</span>
+                      <span className="shrink-0 font-mono text-muted-foreground">{c.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
+
+          {target && (
+            <section className="mb-5">
+              <h2 className="mb-2 font-semibold">Tapped building</h2>
+              {pickedBuilding ? (
+                <dl className="space-y-1">
+                  <Row label="Type" value={pickedBuilding.typeLabel} />
+                  {pickedBuilding.name && <Row label="Name" value={pickedBuilding.name} />}
+                  {pickedBuilding.address && (
+                    <Row label="Address" value={pickedBuilding.address} />
+                  )}
+                  {pickedBuilding.heightM !== null && (
+                    <Row label="Height" value={`${pickedBuilding.heightM.toFixed(1)} m`} />
+                  )}
+                  {pickedBuilding.levels !== null && (
+                    <Row label="Levels" value={`${pickedBuilding.levels}`} />
+                  )}
+                  {pickedBuilding.rawType && pickedBuilding.rawType !== "yes" && (
+                    <Row label="OSM tag" value={`building=${pickedBuilding.rawType}`} />
+                  )}
+                </dl>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Tap any building in the 3D view to identify it.
+                </p>
+              )}
+            </section>
+          )}
 
           {target && (
             <section className="mb-5">
@@ -548,13 +711,41 @@ export default function SitePageClient() {
             </section>
           )}
 
-          <section>
+          <section className="mb-5">
             <h2 className="mb-2 font-semibold">Measurement</h2>
             <p className="text-xs text-muted-foreground">
               {lastMeasurement !== null
                 ? `Last: ${lastMeasurement.toFixed(1)} m`
                 : "Tap the ruler, then tap two points in the scene."}
             </p>
+          </section>
+
+          <section>
+            <h2 className="mb-2 font-semibold">Legend</h2>
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Buildings</p>
+            <ul className="mb-3 grid grid-cols-2 gap-x-3 gap-y-1">
+              {BUILDING_COLOUR_LEGEND.map((item) => (
+                <li key={item.label} className="flex items-center gap-2">
+                  <span
+                    className="size-3 shrink-0 rounded-sm border border-black/20"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="truncate text-xs">{item.label}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Roads</p>
+            <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+              {ROAD_COLOUR_LEGEND.map((item) => (
+                <li key={item.label} className="flex items-center gap-2">
+                  <span
+                    className="h-1 w-4 shrink-0 rounded-full border border-black/10"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="truncate text-xs">{item.label}</span>
+                </li>
+              ))}
+            </ul>
           </section>
         </div>
       </div>
@@ -584,4 +775,77 @@ function formatHour(hour: number): string {
   const h = Math.floor(hour)
   const m = Math.round((hour - h) * 60)
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+}
+
+/** Cheap great-circle distance in metres — enough to decide if the camera has
+ * moved far enough to warrant a refetch. */
+function roughMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const R = 6371000
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(bLat - aLat)
+  const dLon = toRad(bLon - aLon)
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(s))
+}
+
+// Accumulation caps — how much roaming coverage we keep in memory before
+// dropping whatever's farthest from where the camera is now.
+const MAX_VIEWPORT_ROADS = 6000
+const MAX_VIEWPORT_TREES = 700
+const MAX_VIEWPORT_CANOPIES = 500
+
+function dedupeById<T>(items: T[], id: (t: T) => number): T[] {
+  const byId = new Map<number, T>()
+  for (const item of items) byId.set(id(item), item)
+  return [...byId.values()]
+}
+
+/** Drop items farthest from `center` once past `cap`; optionally sort the whole
+ * list nearest-first (needed for trees — the scene draws only the first N). */
+function capNearest<T>(
+  items: T[],
+  point: (t: T) => LatLon | undefined,
+  center: LatLon,
+  cap: number,
+  alwaysSort = false,
+): T[] {
+  if (items.length <= cap && !alwaysSort) return items
+  const scored = items.map((t) => {
+    const p = point(t)
+    return { t, d: p ? roughMeters(center.lat, center.lon, p.lat, p.lon) : Infinity }
+  })
+  scored.sort((a, b) => a.d - b.d)
+  return scored.slice(0, cap).map((x) => x.t)
+}
+
+/** Fold a fresh viewport pull into the accumulated set, de-duped by OSM id and
+ * distance-capped around the current view centre. */
+function mergeAccumulated(
+  prev: ViewportOsm | null,
+  incoming: ViewportOsm,
+  center: LatLon,
+): ViewportOsm {
+  return {
+    roads: capNearest(
+      dedupeById([...(prev?.roads ?? []), ...incoming.roads], (w) => w.id),
+      (w) => w.geometry[0],
+      center,
+      MAX_VIEWPORT_ROADS,
+    ),
+    trees: capNearest(
+      dedupeById([...(prev?.trees ?? []), ...incoming.trees], (t) => t.id),
+      (t) => ({ lat: t.lat, lon: t.lon }),
+      center,
+      MAX_VIEWPORT_TREES,
+      true,
+    ),
+    canopies: capNearest(
+      dedupeById([...(prev?.canopies ?? []), ...incoming.canopies], (c) => c.id),
+      (c) => c.geometry[0],
+      center,
+      MAX_VIEWPORT_CANOPIES,
+    ),
+  }
 }

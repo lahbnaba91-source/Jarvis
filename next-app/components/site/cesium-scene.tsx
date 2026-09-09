@@ -5,10 +5,22 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 
 import { setCesiumBaseUrl } from "./cesium-base-url"
 
+import { buildingTypeLabel } from "@/lib/site/geometry"
 import type { CanopyArea, LatLon, OverpassWay, TreePoint } from "@/lib/site/overpass"
 
 export interface CesiumSceneHandle {
   clearMeasurements: () => void
+}
+
+/** What a tap on a 3D building reports back — read straight off the OSM
+ * Buildings tile feature's own properties. */
+export interface PickedBuilding {
+  typeLabel: string
+  rawType: string | null
+  name: string | null
+  address: string | null
+  heightM: number | null
+  levels: number | null
 }
 
 export interface CesiumSceneProps {
@@ -26,6 +38,17 @@ export interface CesiumSceneProps {
   buildingHighlight: LatLon[] | null
   measurementMode: boolean
   onMeasurement: (distanceMeters: number) => void
+  /** Float the street name over each named road centreline. */
+  showRoadLabels: boolean
+  /** Fires with a building's details on tap, or null when empty ground is tapped. */
+  onBuildingPick: (building: PickedBuilding | null) => void
+  /** Fires (debounced) after the camera settles: the ground point at the centre
+   * of the view and a fetch radius scaled to zoom. radiusM is 0 when the view is
+   * too far out to fetch detail centrelines for (the flat road tiles cover it). */
+  onViewChange: (center: LatLon, radiusM: number) => void
+  /** Drape a translucent OSM road-tile layer over everything so every street in
+   * the city is drawn at all zooms, under the styled 3D centrelines. */
+  showRoadMap: boolean
 }
 
 // OSM Buildings ships untextured. Colour the massing by use-type, with a
@@ -97,6 +120,10 @@ function roadStyle(highway: string): { color: Cesium.Color; width: number } {
   }
 }
 
+// Opacity of the citywide OSM road-tile overlay over the aerial base. Low
+// enough to keep the 3D scene readable, high enough to trace every street.
+const OSM_ROAD_TILE_ALPHA = 0.5
+
 // Entity count is the perf ceiling here: each tree is two primitives. Cap the
 // individually-drawn trees and lean on the canopy volumes for dense areas.
 const MAX_TREE_PROXIES = 350
@@ -126,18 +153,38 @@ function enhanceScene(viewer: Cesium.Viewer) {
 }
 
 const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function CesiumScene(
-  { ionToken, target, date, roads, trees, canopies, buildingHighlight, measurementMode, onMeasurement },
+  {
+    ionToken,
+    target,
+    date,
+    roads,
+    trees,
+    canopies,
+    buildingHighlight,
+    measurementMode,
+    onMeasurement,
+    showRoadLabels,
+    onBuildingPick,
+    onViewChange,
+    showRoadMap,
+  },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
-  const roadEntitiesRef = useRef<Cesium.Entity[]>([])
+  const roadEntityMapRef = useRef<Map<number, Cesium.Entity>>(new Map())
+  const roadLabelEntitiesRef = useRef<Cesium.Entity[]>([])
+  const osmOverlayLayerRef = useRef<Cesium.ImageryLayer | null>(null)
   const treeEntitiesRef = useRef<Cesium.Entity[]>([])
   const highlightEntityRef = useRef<Cesium.Entity | null>(null)
   const measureEntitiesRef = useRef<Cesium.Entity[]>([])
+  const pickMarkerEntityRef = useRef<Cesium.Entity | null>(null)
   const pendingPointRef = useRef<Cesium.Cartesian3 | null>(null)
   const measurementModeRef = useRef(measurementMode)
   const onMeasurementRef = useRef(onMeasurement)
+  const onBuildingPickRef = useRef(onBuildingPick)
+  const onViewChangeRef = useRef(onViewChange)
+  const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -146,6 +193,12 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
   useEffect(() => {
     onMeasurementRef.current = onMeasurement
   }, [onMeasurement])
+  useEffect(() => {
+    onBuildingPickRef.current = onBuildingPick
+  }, [onBuildingPick])
+  useEffect(() => {
+    onViewChangeRef.current = onViewChange
+  }, [onViewChange])
 
   useImperativeHandle(ref, () => ({
     clearMeasurements() {
@@ -157,6 +210,73 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
     },
   }))
 
+  // Tap a building in the OSM Buildings tileset -> read its own feature
+  // properties and report them up, plus drop a labelled marker on it. Tapping
+  // empty ground clears the selection.
+  function identifyBuilding(viewer: Cesium.Viewer, position: Cesium.Cartesian2) {
+    const clearMarker = () => {
+      if (pickMarkerEntityRef.current) {
+        viewer.entities.remove(pickMarkerEntityRef.current)
+        pickMarkerEntityRef.current = null
+      }
+    }
+    const feature = viewer.scene.pick(position)
+    if (!(feature instanceof Cesium.Cesium3DTileFeature)) {
+      clearMarker()
+      onBuildingPickRef.current(null)
+      return
+    }
+
+    const prop = (name: string): string | null => {
+      const v = feature.getProperty(name)
+      return v === undefined || v === null || v === "" ? null : String(v)
+    }
+    const num = (raw: string | null): number | null => {
+      if (raw === null) return null
+      const n = Number.parseFloat(raw)
+      return Number.isFinite(n) ? n : null
+    }
+    const rawType = prop("building")
+    const address =
+      [prop("addr:housenumber"), prop("addr:street")].filter(Boolean).join(" ") || null
+    const info: PickedBuilding = {
+      typeLabel: buildingTypeLabel(rawType ?? undefined),
+      rawType,
+      name: prop("name"),
+      address,
+      heightM: num(prop("height") ?? prop("cesium#estimatedHeight")),
+      levels: num(prop("building:levels")),
+    }
+    onBuildingPickRef.current(info)
+
+    const anchor = viewer.scene.pickPosition(position)
+    clearMarker()
+    if (Cesium.defined(anchor)) {
+      pickMarkerEntityRef.current = viewer.entities.add({
+        position: anchor as Cesium.Cartesian3,
+        point: {
+          pixelSize: 9,
+          color: Cesium.Color.ORANGE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 1,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: info.name ?? info.typeLabel,
+          font: "13px sans-serif",
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          showBackground: true,
+          backgroundColor: Cesium.Color.BLACK.withAlpha(0.55),
+          pixelOffset: new Cesium.Cartesian2(0, -16),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+    }
+  }
+
   // Mount once: build the viewer, base imagery/terrain/buildings, and the
   // measurement click handler.
   useEffect(() => {
@@ -165,6 +285,8 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
     // Held locally so cleanup can destroy the viewer even if teardown runs
     // before init finished (React StrictMode double-mounts this effect in dev).
     let localViewer: Cesium.Viewer | null = null
+    // Stable ref object (never reassigned) — safe to read here and use in cleanup.
+    const roadEntityMap = roadEntityMapRef.current
     setCesiumBaseUrl()
 
     async function init() {
@@ -218,6 +340,18 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
         } catch (err) {
           console.warn("[site] OSM Buildings tileset unavailable:", err)
         }
+        // Translucent OSM road-map draped over the aerial base so the whole
+        // city's street grid is always drawn, at any zoom, with no API cost.
+        // (Skipped without ion — there the OSM map already IS the base layer.)
+        try {
+          const overlay = viewer.imageryLayers.addImageryProvider(
+            new Cesium.OpenStreetMapImageryProvider({ url: "https://tile.openstreetmap.org/" }),
+          )
+          overlay.alpha = showRoadMap ? OSM_ROAD_TILE_ALPHA : 0
+          osmOverlayLayerRef.current = overlay
+        } catch (err) {
+          console.warn("[site] OSM road overlay unavailable:", err)
+        }
       }
 
       if (cancelled) return
@@ -230,7 +364,10 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
 
       const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)
       handler.setInputAction((click: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
-        if (!measurementModeRef.current) return
+        if (!measurementModeRef.current) {
+          identifyBuilding(viewer, click.position)
+          return
+        }
         const picked = viewer.scene.pickPosition(click.position)
         if (!Cesium.defined(picked)) return
         const point = picked as Cesium.Cartesian3
@@ -277,6 +414,43 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
         onMeasurementRef.current(distance)
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
 
+      // Viewport-driven OSM loading: after the camera settles, report the
+      // ground point under the middle of the view and a zoom-scaled radius so
+      // the page can refetch roads/trees for wherever we're now looking.
+      const VIEW_MAX_HEIGHT_M = 6000
+      const emitViewChange = () => {
+        if (viewer.isDestroyed()) return
+        const canvas = viewer.scene.canvas
+        const centerPx = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2)
+        let center: LatLon | null = null
+        const ray = viewer.camera.getPickRay(centerPx)
+        if (ray) {
+          const hit = viewer.scene.globe.pick(ray, viewer.scene)
+          if (Cesium.defined(hit)) {
+            const carto = Cesium.Cartographic.fromCartesian(hit as Cesium.Cartesian3)
+            center = {
+              lat: Cesium.Math.toDegrees(carto.latitude),
+              lon: Cesium.Math.toDegrees(carto.longitude),
+            }
+          }
+        }
+        const camCarto = viewer.camera.positionCartographic
+        if (!center) {
+          center = {
+            lat: Cesium.Math.toDegrees(camCarto.latitude),
+            lon: Cesium.Math.toDegrees(camCarto.longitude),
+          }
+        }
+        const heightM = camCarto.height
+        const radiusM =
+          heightM > VIEW_MAX_HEIGHT_M ? 0 : Math.min(2000, Math.max(200, heightM * 0.9))
+        onViewChangeRef.current(center, radiusM)
+      }
+      viewer.camera.moveEnd.addEventListener(() => {
+        if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current)
+        moveEndTimerRef.current = setTimeout(emitViewChange, 1000)
+      })
+
       viewerRef.current = viewer
       setReady(true)
     }
@@ -285,9 +459,15 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
 
     return () => {
       cancelled = true
+      if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current)
       const viewer = viewerRef.current ?? localViewer
       if (viewer && !viewer.isDestroyed()) viewer.destroy()
       viewerRef.current = null
+      // Entities belonged to the now-destroyed viewer — drop the id map and
+      // label list so the rebuilt viewer re-adds them from scratch.
+      roadEntityMap.clear()
+      roadLabelEntitiesRef.current = []
+      osmOverlayLayerRef.current = null
       // Reset so the rebuilt viewer's setReady(true) re-fires the ready-gated
       // effects below (flyTo, clock, roads, footprint highlight).
       setReady(false)
@@ -325,26 +505,81 @@ const CesiumScene = forwardRef<CesiumSceneHandle, CesiumSceneProps>(function Ces
     viewer.clock.currentTime = Cesium.JulianDate.fromDate(date)
   }, [date, ready])
 
+  // Styled 3D road centrelines. `roads` accumulates as the camera roams, so
+  // this diffs by OSM way id — add only the new ways, drop only the ones that
+  // fell out of range — instead of rebuilding every polyline on each pan.
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer) return
-    for (const entity of roadEntitiesRef.current) viewer.entities.remove(entity)
-    roadEntitiesRef.current = roads.map((way) => {
-      const { color, width } = roadStyle(way.tags.highway ?? "road")
-      return viewer.entities.add({
-        name: way.tags.name ?? way.tags.ref ?? "",
-        polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(
-            way.geometry.flatMap((p) => [p.lon, p.lat]),
-          ),
-          width,
-          material: color,
-          clampToGround: true,
-        },
-      })
-    })
+    const entityById = roadEntityMapRef.current
+    const nextIds = new Set<number>()
 
-  }, [roads, ready])
+    for (const way of roads) {
+      nextIds.add(way.id)
+      if (entityById.has(way.id)) continue
+      const { color, width } = roadStyle(way.tags.highway ?? "road")
+      entityById.set(
+        way.id,
+        viewer.entities.add({
+          name: way.tags.name ?? way.tags.ref ?? "",
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(
+              way.geometry.flatMap((p) => [p.lon, p.lat]),
+            ),
+            width,
+            material: color,
+            clampToGround: true,
+          },
+        }),
+      )
+    }
+    for (const [id, entity] of entityById) {
+      if (!nextIds.has(id)) {
+        viewer.entities.remove(entity)
+        entityById.delete(id)
+      }
+    }
+
+    // Labels are far fewer (named ways only, de-duped) — cheap to rebuild whole.
+    for (const entity of roadLabelEntitiesRef.current) viewer.entities.remove(entity)
+    const labels: Cesium.Entity[] = []
+    if (showRoadLabels) {
+      const labelled = new Set<string>()
+      for (const way of roads) {
+        const name = way.tags.name ?? way.tags.ref ?? ""
+        if (!name || labelled.has(name) || way.geometry.length === 0) continue
+        labelled.add(name)
+        const mid = way.geometry[Math.floor(way.geometry.length / 2)]
+        labels.push(
+          viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(mid.lon, mid.lat),
+            label: {
+              text: name,
+              font: "12px sans-serif",
+              fillColor: Cesium.Color.WHITE,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 3,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              showBackground: true,
+              backgroundColor: Cesium.Color.BLACK.withAlpha(0.55),
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+              scaleByDistance: new Cesium.NearFarScalar(150, 1, 1200, 0.55),
+              translucencyByDistance: new Cesium.NearFarScalar(900, 1, 2200, 0),
+            },
+          }),
+        )
+      }
+    }
+    roadLabelEntitiesRef.current = labels
+  }, [roads, showRoadLabels, ready])
+
+  // Citywide OSM road-tile overlay opacity (added only when an ion token gave
+  // us an aerial base — otherwise the OSM map is already the base layer).
+  useEffect(() => {
+    const layer = osmOverlayLayerRef.current
+    if (!layer) return
+    layer.alpha = showRoadMap ? OSM_ROAD_TILE_ALPHA : 0
+  }, [showRoadMap, ready])
 
   // Mapped trees as shadow-casting proxies (canopy ellipsoid + trunk), plus
   // wooded areas as low translucent canopy volumes so both block the sun.
