@@ -1,0 +1,75 @@
+name: CI
+
+# Runs the test suites that already exist in this repo but until now only ran
+# when someone remembered to. Nothing here touches the HQ vault (its own repo,
+# gitignored) or the always-on services — it only builds and tests code.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch/PR cancels the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  badge:
+    name: BADGE (services/badge)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/badge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # BADGE has zero npm dependencies (stdlib + child_process only), so
+      # there's nothing to install. It does need the native PARMA driver
+      # compiled — g++ ships on ubuntu-latest. The EXPACS cross-check builds
+      # its own reference binary if missing.
+      - name: Build native PARMA driver
+        run: bash engine/native/build.sh
+      - name: Test
+        run: npm test
+
+  next-app:
+    name: Site Analyzer (next-app)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: next-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: next-app/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      # No ion token in CI — cesium-scene.tsx falls back to `null` and a flat
+      # basemap. The build must not depend on the secret.
+      - name: Build
+        run: npm run build
+
+  barehands:
+    name: barehands gesture/smoothing tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: barehands
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # No package.json — the tests are pure-Node, no deps, no fixtures.
+      - run: node test/test-smoothing.js
+      - run: node test/test-gestures.js
