@@ -28,9 +28,9 @@ Write the updates now. Consolidate — if this replaces something already in the
 
 ## 2. Today's daily note
 
-- Path: `HQ/01 - Daily Notes/NN - Month YYYY/YYYY-MM-DD.md`. Verify today's date against the system clock first (`date` — a session can span midnight). Use Pacific (Pacific/Tijuana).
+- Path: `HQ/01 - Daily Notes/NN - Month YYYY/YYYY-MM-DD.md`. Verify today's date against the system clock first (`date` — a session can span midnight). Use the user's local timezone (in CLAUDE.md).
 - If today's note doesn't exist, create it from `HQ/01 - Daily Notes/Daily Note Template.md` — copy the template, fill the placeholders. Never hand-roll a bare heading.
-- If it exists, append a new `## Session N — [Pacific time]: [topic]` section. Don't overwrite the earlier session.
+- If it exists, append a new `## Session N — [local time]: [topic]` section. Don't overwrite the earlier session.
 - Fill the template's sections: Index bullet (update this first), What Got Done, What's Still In Progress, Decisions Made, Notes Touched, Profile Updates. An empty section stays as a bare `-`.
 
 ## 3. Folder indexes

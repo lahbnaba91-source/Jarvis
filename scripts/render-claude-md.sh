@@ -13,7 +13,7 @@
 #     MAKE_IT_YOURS=Call me "boss" or "Luis" — never anything more formal ...
 #     VAULT_PATH=/workspaces/Jarvis/HQ
 #     JARVIS_ROOT=/workspaces/Jarvis
-#     TIMEZONE=Pacific — Pacific/Tijuana
+#     TIMEZONE=America/Los_Angeles
 #     WELCOME_LINE=All systems online, boss. What are we working on today?
 #     MULTISESSION_TAIL=; this cost real recovery work on 2026-09-04.
 set -euo pipefail

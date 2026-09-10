@@ -32,7 +32,7 @@ from datetime import datetime
 
 try:
     from zoneinfo import ZoneInfo
-    PACIFIC = ZoneInfo("America/Tijuana")
+    PACIFIC = ZoneInfo("America/Los_Angeles")
 except Exception:  # zoneinfo missing or no tz database -- fall back to naive
     PACIFIC = None
 
