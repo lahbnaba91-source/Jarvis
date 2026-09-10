@@ -86,7 +86,9 @@ fi
 
 # --- jarvis-voice venv ----------------------------------------
 say "jarvis-voice venv"
-if [ -x jarvis-voice/.venv/bin/python ]; then
+if [ "${JARVIS_SKIP_VOICE:-0}" = 1 ]; then
+  skip "JARVIS_SKIP_VOICE=1 — not building the voice venv (no model download)"
+elif [ -x jarvis-voice/.venv/bin/python ]; then
   skip "jarvis-voice/.venv already exists"
 elif [ -d jarvis-voice ] && command -v uv >/dev/null 2>&1; then
   (cd jarvis-voice && uv sync) \

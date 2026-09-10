@@ -30,9 +30,22 @@ jarvis_resolve_root() {
 }
 
 # --- prompts (tty-aware) ------------------------------------------------
-# In non-interactive mode (piped with no /dev/tty, or --yes) these never block:
-# ask() returns its default, confirm() returns the assumed answer.
-_have_tty() { [ -e /dev/tty ] && [ "${JARVIS_NONINTERACTIVE:-0}" != "1" ]; }
+# In non-interactive mode (piped with no usable /dev/tty, or --non-interactive)
+# these never block: ask() returns its default, confirm() its assumed answer.
+# /dev/tty can exist as a path yet fail to open (CI, containers) — probe it
+# once and cache the result.
+_have_tty() {
+  if [ -z "${_JARVIS_TTY_OK:-}" ]; then
+    if [ "${JARVIS_NONINTERACTIVE:-0}" != "1" ] && [ -c /dev/tty ] \
+       && (exec 3</dev/tty) 2>/dev/null; then
+      _JARVIS_TTY_OK=1
+    else
+      _JARVIS_TTY_OK=0
+    fi
+    export _JARVIS_TTY_OK
+  fi
+  [ "$_JARVIS_TTY_OK" = 1 ]
+}
 
 ask() {
   # ask "prompt" "default" -> echoes the answer

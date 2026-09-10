@@ -87,6 +87,15 @@ tar -xzf "$tmp/$tarball" -C "$DIR" --strip-components=1
 
 [ -f "$DIR/bootstrap/wizard.sh" ] || die "release layout unexpected — no bootstrap/wizard.sh"
 say "Starting the setup wizard"
-# Re-attach a terminal so the wizard can prompt even when we were piped.
-if [ ! -t 0 ] && [ -e /dev/tty ]; then exec < /dev/tty; fi
+# When piped (curl | bash) stdin isn't a terminal. Re-attach the controlling
+# terminal so the wizard can prompt — but only if one is actually openable
+# (a bare `[ -e /dev/tty ]` is true even in CI/containers where opening it
+# fails). No usable terminal -> run fully non-interactive.
+if [ ! -t 0 ]; then
+  if [ -c /dev/tty ] && (exec 3</dev/tty) 2>/dev/null; then
+    exec </dev/tty
+  else
+    export JARVIS_NONINTERACTIVE=1
+  fi
+fi
 exec bash "$DIR/bootstrap/wizard.sh" --dir "$DIR" "${WIZ_ARGS[@]}"
