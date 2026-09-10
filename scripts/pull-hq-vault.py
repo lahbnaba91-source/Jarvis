@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Cheaply sync new changes from the hq-vault GitHub repo into the local
-/workspaces/Jarvis/HQ working copy, without an AI ever having to diff or
+local HQ/ working copy, without an AI ever having to diff or
 merge the whole vault by hand.
 
 How: a small hidden clone of hq-vault is kept at SENSOR_DIR purely as a
@@ -41,8 +41,11 @@ import subprocess
 import sys
 import tempfile
 
-LOCAL_VAULT = "/workspaces/Jarvis/HQ"
-SENSOR_DIR = "/workspaces/Jarvis/.hq-vault-pull-sensor"
+_ROOT = os.environ.get("JARVIS_ROOT") or os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)
+LOCAL_VAULT = os.path.join(_ROOT, "HQ")
+SENSOR_DIR = os.path.join(_ROOT, ".hq-vault-pull-sensor")
 REPO_OWNER = os.environ.get("HQVAULT_OWNER", "lalp070125")
 REPO_NAME = os.environ.get("HQVAULT_REPO", "hq-vault")
 BRANCH = os.environ.get("HQVAULT_BRANCH", "main")

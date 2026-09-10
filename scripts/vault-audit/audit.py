@@ -36,7 +36,11 @@ try:
 except Exception:  # zoneinfo missing or no tz database -- fall back to naive
     PACIFIC = None
 
-VAULT = "/workspaces/Jarvis/HQ"
+VAULT = os.path.join(
+    os.environ.get("JARVIS_ROOT")
+    or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "HQ",
+)
 REPORT_REL = "07 - Systems Status/Vault Audit.md"
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)

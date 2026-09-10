@@ -1,0 +1,77 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p @@JARVIS_ROOT@@/.voice-bus @@JARVIS_ROOT@@/barehands/state && echo idle > @@JARVIS_ROOT@@/.voice-bus/.voice_state && printf idle > @@JARVIS_ROOT@@/barehands/state/state"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash @@JARVIS_ROOT@@/scripts/claude-quota/hook.sh session"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 @@JARVIS_ROOT@@/scripts/vault-audit/audit.py --quiet-if-clean || true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash @@JARVIS_ROOT@@/scripts/session/guard.sh register || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo thinking > @@JARVIS_ROOT@@/.voice-bus/.voice_state && printf thinking > @@JARVIS_ROOT@@/barehands/state/state"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash @@JARVIS_ROOT@@/scripts/claude-quota/hook.sh prompt"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash @@JARVIS_ROOT@@/scripts/claude-quota/hook.sh tool"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo speaking > @@JARVIS_ROOT@@/.voice-bus/.voice_state; printf speaking > @@JARVIS_ROOT@@/barehands/state/state; nohup bash -c 'sleep 3; echo idle > @@JARVIS_ROOT@@/.voice-bus/.voice_state; printf idle > @@JARVIS_ROOT@@/barehands/state/state' >/dev/null 2>&1 &"
+          }
+        ]
+      }
+    ]
+  }
+}

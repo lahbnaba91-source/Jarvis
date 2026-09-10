@@ -25,7 +25,11 @@ import json
 import os
 import re
 
-VAULT = "/workspaces/Jarvis/HQ"
+VAULT = os.path.join(
+    os.environ.get("JARVIS_ROOT")
+    or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "HQ",
+)
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)

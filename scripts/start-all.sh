@@ -4,6 +4,9 @@
 # a codespace restart, so this is the "bring the stack back up" command.
 set -uo pipefail
 
+# Repo root: honour an explicit JARVIS_ROOT, else self-locate from this script.
+ROOT="${JARVIS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 start() {
   local name="$1" port="$2" dir="$3" cmd="$4" log="$5"
   if ss -tln 2>/dev/null | grep -q ":$port "; then
@@ -14,9 +17,9 @@ start() {
   echo "$name starting on :$port (log: $log)"
 }
 
-start "ai-visualizer" 8790 /workspaces/Jarvis/ai-visualizer "python3 server.py --no-open" /workspaces/Jarvis/.voice-bus/server.log
-start "jarvis-voice"  8791 /workspaces/Jarvis/jarvis-voice ".venv/bin/python server.py" /workspaces/Jarvis/jarvis-voice/tmp/server.log
-start "barehands"     8794 /workspaces/Jarvis/barehands "python3 server.py" state/server.log
+start "ai-visualizer" 8790 "$ROOT/ai-visualizer" "python3 server.py --no-open" "$ROOT/.voice-bus/server.log"
+start "jarvis-voice"  8791 "$ROOT/jarvis-voice" ".venv/bin/python server.py" "$ROOT/jarvis-voice/tmp/server.log"
+start "barehands"     8794 "$ROOT/barehands" "python3 server.py" state/server.log
 
 echo "jarvis-voice takes a few seconds to warm models — tail tmp/server.log for 'jarvis-voice ready'."
 

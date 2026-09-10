@@ -25,7 +25,9 @@ from pathlib import Path
 
 import requests
 
-JARVIS_ROOT = Path("/workspaces/Jarvis")
+JARVIS_ROOT = Path(
+    os.environ.get("JARVIS_ROOT") or Path(__file__).resolve().parents[2]
+)
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-120b"
 MAX_TOOL_ROUNDS = 10

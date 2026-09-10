@@ -9,7 +9,7 @@ Usage:
     analyze_track.py <audio-file> <out.json> [--track-id <spotify-uri>]
 
 Requires numpy -- run with jarvis-voice's venv (already has it):
-    /workspaces/Jarvis/jarvis-voice/.venv/bin/python3 analyze_track.py ...
+    "$JARVIS_ROOT/jarvis-voice/.venv/bin/python3" analyze_track.py ...
 
 Pipeline:
   1. Decode to mono float32 PCM @ 22050Hz via ffmpeg (no extra audio libs).

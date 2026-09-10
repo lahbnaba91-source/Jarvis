@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Push /workspaces/Jarvis/HQ to the hq-vault GitHub repo without breaking
+"""Push the local HQ/ vault to the hq-vault GitHub repo without breaking
 the GitHub Gitless Sync Obsidian plugin's own state on other devices.
 
 Background (see HQ/05 - Resources/HQ Vault Sync.md for the full story):
@@ -33,7 +33,11 @@ import sys
 import tempfile
 import time
 
-LOCAL_VAULT = "/workspaces/Jarvis/HQ"
+LOCAL_VAULT = os.path.join(
+    os.environ.get("JARVIS_ROOT")
+    or os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "HQ",
+)
 REPO_OWNER = os.environ.get("HQVAULT_OWNER", "lalp070125")
 REPO_NAME = os.environ.get("HQVAULT_REPO", "hq-vault")
 BRANCH = os.environ.get("HQVAULT_BRANCH", "main")

@@ -3,7 +3,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help bootstrap dev format \
+.PHONY: help bootstrap wizard render-claude release dev format \
         test test-badge test-next test-barehands test-python \
         lint lint-next lint-python lint-shell
 
@@ -12,8 +12,20 @@ help: ## List targets
 		| sort | awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 bootstrap: ## First-time / rebuild setup (interactive — prompts for secrets)
-	bash scripts/install-prereqs.sh
-	bash scripts/bootstrap.sh
+	bash bootstrap/wizard.sh
+
+wizard: ## Same as bootstrap — run the setup wizard from this checkout
+	bash bootstrap/wizard.sh
+
+render-claude: ## Regenerate CLAUDE.md from templates/CLAUDE.md.tmpl + CLAUDE.vars
+	bash scripts/render-claude-md.sh
+
+release: ## Cut a release: make release VERSION=v0.3.1  (tags + pushes; CI builds the tarball)
+	@test -n "$(VERSION)" || { echo "set VERSION, e.g. make release VERSION=v0.3.1" >&2; exit 1; }
+	@echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "VERSION must look like v1.2.3" >&2; exit 1; }
+	git tag -a "$(VERSION)" -m "Jarvis $(VERSION)"
+	git push origin "$(VERSION)"
+	@echo "pushed tag $(VERSION) — watch the Release workflow in Actions"
 
 dev: ## Bring the always-on services up (ai-visualizer, jarvis-voice, barehands)
 	bash scripts/start-all.sh

@@ -22,7 +22,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo /workspaces/Jarvis)"
+repo_root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "${JARVIS_ROOT:-$(cd "$here/../.." && pwd)}")"
 reg_dir="$repo_root/.claude/sessions"
 
 # The SessionStart hook runs as a child of the Claude Code process, so $PPID is a

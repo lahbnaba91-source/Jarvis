@@ -1,0 +1,81 @@
+name: Release
+
+# Cut a public, version-pinned Jarvis distribution. Push a tag like v0.3.1 and
+# this builds jarvis-dist-<tag>.tar.gz from the tracked tree — minus the vault,
+# minus any local state, with a placeholder CLAUDE.md the installer's wizard
+# renders on the target machine — and publishes it as a GitHub Release with
+# install.sh attached. `main` is never what users download; a release is.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to (re)build a release for, e.g. v0.3.1"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Building release $TAG"
+
+      - name: Assemble dist tree
+        id: build
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          STAGE="jarvis"
+          rm -rf dist && mkdir -p "dist/$STAGE"
+          # Tracked files only — HQ/, venvs, *.state/, *.log are all gitignored
+          # and never enter the archive.
+          git archive --format=tar HEAD | tar -x -C "dist/$STAGE"
+
+          cd "dist/$STAGE"
+          # Strip anything machine-local or not meant to ship.
+          rm -rf .claude/settings.local.json .claude/sessions .claude/scheduled_tasks.lock
+          rm -rf .claude/skills .agents/skills          # re-fetched by the wizard via skills-lock.json
+          rm -f  CLAUDE.local.md CLAUDE.vars            # never present in a clean archive; belt-and-braces
+          rm -rf barehands.pre-swap-* .hq-vault-pull-sensor .voice-bus .ruff_cache .pytest_cache
+          # Ship a placeholder CLAUDE.md; bootstrap/10-core.sh renders it.
+          cp templates/CLAUDE.md.tmpl CLAUDE.md
+          # settings.json ships only as the template.
+          rm -f .claude/settings.json
+          cd -
+
+          # Guard: no real persona / vault content leaked into the tarball.
+          if grep -rqiE 'Pacific|REDACTED' "dist/$STAGE"; then
+            echo "::error::personal content found in dist tree — aborting"; exit 1
+          fi
+          if [ -e "dist/$STAGE/HQ" ]; then
+            echo "::error::HQ/ present in dist tree — aborting"; exit 1
+          fi
+
+          TARBALL="jarvis-dist-$TAG.tar.gz"
+          tar -czf "$TARBALL" -C dist "$STAGE"
+          sha256sum "$TARBALL" | tee "$TARBALL.sha256"
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          TARBALL="${{ steps.build.outputs.tarball }}"
+          gh release view "$TAG" >/dev/null 2>&1 \
+            && gh release upload "$TAG" "$TARBALL" "$TARBALL.sha256" install.sh --clobber \
+            || gh release create "$TAG" "$TARBALL" "$TARBALL.sha256" install.sh \
+                 --title "Jarvis $TAG" \
+                 --notes "One-line install:\n\n\`\`\`\ncurl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash\n\`\`\`"

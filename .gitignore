@@ -2,6 +2,14 @@
 # GitHub Gitless Sync. Kept on disk here for the local AI session, not tracked.
 HQ/
 
+# CLAUDE.md is generated (identity/tone values are personal, the repo is public).
+# The tracked artefacts are templates/CLAUDE.md.tmpl + CLAUDE.vars.example.
+# CLAUDE.vars holds this machine's real values; scripts/render-claude-md.sh
+# regenerates CLAUDE.md from the two. Neither the output nor the local values
+# are committed.
+CLAUDE.md
+CLAUDE.vars
+
 # ai-visualizer (vendored from jaredrhod/ai-visualizer, plus a Jarvis-specific
 # voice-proxy patch and bind fix) IS tracked here as of 2026-08-29 — it used
 # to be excluded entirely on the theory that update.sh would re-vendor it,

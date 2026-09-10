@@ -1,0 +1,16 @@
+# Copy to CLAUDE.vars (gitignored) and fill in, then run scripts/render-claude-md.sh.
+# These values are substituted for @@KEY@@ placeholders in templates/CLAUDE.md.tmpl.
+# Everything after the first '=' is literal, including spaces and punctuation.
+# A key with an empty value (KEY=) deletes its placeholder.
+
+ASSISTANT_NAME=Jarvis
+USER_NAME=boss
+TONE=Be direct and plain-spoken, with a bit of wit. Skip corporate hedging and filler; every response, including the factual ones.
+ADDRESS_LINE=Call me "boss".
+MAKE_IT_YOURS=Call me "boss" — keep it that informal.
+BOARD_CLIENT=a phone's browser
+VAULT_PATH=/replace/with/abs/path/to/HQ
+JARVIS_ROOT=/replace/with/abs/path/to/jarvis
+TIMEZONE=America/Los_Angeles
+WELCOME_LINE=All systems online. What are we working on today?
+MULTISESSION_TAIL=.

@@ -1,15 +1,29 @@
 # Jarvis
 
 Personal chief-of-staff system: an operating stack plus the knowledge vault that
-drives it. Runs in a GitHub Codespace.
+drives it. Runs in a GitHub Codespace, or on any Linux/macOS machine via the
+installer.
 
-**Private. All rights reserved.** See [LICENSE](LICENSE).
+Licensed **PolyForm Noncommercial 1.0.0** — free for personal and hobby use, no
+commercial use. See [LICENSE](LICENSE).
+
+## Install (fresh machine)
+
+```sh
+curl -fsSL https://github.com/lahbnaba91-source/Jarvis/releases/latest/download/install.sh | bash
+```
+
+Downloads a pinned release (never `main`), unpacks to `~/jarvis`, and runs the
+setup wizard — fresh empty vault, your own assistant name, your own secrets.
+Full details and flags in [INSTALL.md](INSTALL.md).
 
 ## Layout
 
 | Path | What it is | Runs on |
 | --- | --- | --- |
-| `CLAUDE.md` | Jarvis boot config — identity + the rules that can't lapse. Loads every session. | — |
+| `CLAUDE.md` | Jarvis boot config — identity + the rules that can't lapse. Loads every session. Generated (gitignored) from `templates/CLAUDE.md.tmpl` + `CLAUDE.vars`; regen with `scripts/render-claude-md.sh`. | — |
+| `install.sh`, `bootstrap/` | The public one-line installer and the setup wizard it runs (`bootstrap/wizard.sh`). | — |
+| `templates/` | `CLAUDE.md.tmpl` and `vault-skeleton/` — what a fresh install is built from. | — |
 | `HQ/` | The Obsidian vault: Jarvis's memory and formation. **Not tracked here** — own repo (`hq-vault`), synced separately, kept on disk for the local session. Start at `HQ/VAULT-INDEX.md`. | — |
 | `barehands/` | Hand-tracked glass board — second-screen gesture cockpit, viewed from a phone. Vendored from `jaredrhod/barehands` plus local gesture/customization work — see `barehands/DIVERGENCE.md`. | `:8794` |
 | `ai-visualizer/` | Jarvis Face — the talking-head visualizer. Vendored from `jaredrhod/ai-visualizer` plus a voice-proxy patch + bind fix — see `ai-visualizer/DIVERGENCE.md`. | `:8790` |
@@ -24,8 +38,9 @@ drives it. Runs in a GitHub Codespace.
 
 | Path | Purpose |
 | --- | --- |
-| `install-prereqs.sh` | Step 0 of a rebuild — system packages, `uv`, `gh`, Claude Code. Idempotent. |
-| `bootstrap.sh` | Jarvis-specific setup (vendored repos, venvs, secrets, hooks). **Interactive** — run in a real terminal. Idempotent. |
+| `install-prereqs.sh` | Back-compat shim → `bootstrap/00-prereqs.sh` (system packages, `uv`, `gh`, Claude Code). |
+| `bootstrap.sh` | Back-compat shim → `bootstrap/wizard.sh` (the full interactive setup). |
+| `render-claude-md.sh` | Regenerate `CLAUDE.md` from `templates/CLAUDE.md.tmpl` + `CLAUDE.vars`. |
 | `start-all.sh` | Bring the stack up (`ai-visualizer`, `jarvis-voice`, `barehands`). Skips anything already listening. |
 | `session/guard.sh` | SessionStart hook — warns when another Jarvis session shares the working tree. |
 | `session/worktree.sh` | Make a private worktree + branch for isolated work. |
@@ -37,20 +52,18 @@ drives it. Runs in a GitHub Codespace.
 | `groq-agent/`, `gesture-classifier/` | Groq chat agent; MLP training pipeline for barehands gestures. |
 | `pull-hq-vault.py`, `push-hq-vault.py` | Sync `HQ/` against the `hq-vault` repo. |
 
-## Bringing it up on a fresh machine
+## Bringing it up from a checkout
 
 ```sh
-bash scripts/install-prereqs.sh      # system deps, uv, gh, claude
-gh auth login                        # interactive
-claude login                         # interactive
-bash scripts/bootstrap.sh            # Jarvis-specific setup (interactive prompts)
-bash scripts/start-all.sh            # start the services
+make wizard          # bootstrap/wizard.sh — prereqs, core stack, module menu
+claude login         # interactive, when the wizard tells you to
 ```
 
-In a Codespace, `.devcontainer/devcontainer.json` runs `install-prereqs.sh`
-automatically on create; `bootstrap.sh` still has to be run by hand because it
-prompts for secrets. See `HQ/05 - Resources/Vault Tooling/Full Rebuild
-(disaster recovery).md` for the full checklist.
+Or the individual steps: `bash bootstrap/00-prereqs.sh` (deps) → `gh auth login`
+→ `claude login` → `bash bootstrap/wizard.sh`. In a Codespace,
+`.devcontainer/devcontainer.json` runs the prereqs step on create; the rest is
+run by hand because it prompts for secrets. See `HQ/05 - Resources/Vault
+Tooling/Full Rebuild (disaster recovery).md` for the disaster-recovery checklist.
 
 ## Common tasks
 
@@ -61,7 +74,12 @@ make lint      # ruff + shellcheck  (eslint needs `npm ci` in next-app/)
 make dev       # start-all.sh
 ```
 
-## CI
+## CI / releases
 
 `.github/workflows/ci.yml` runs the BADGE, Site Analyzer, barehands, Python, and
 shell suites on every push. It never touches `HQ/` or the always-on services.
+
+`.github/workflows/release.yml` fires on a `vX.Y.Z` tag: it builds
+`jarvis-dist-<tag>.tar.gz` from the tracked tree (no vault, no local state,
+placeholder `CLAUDE.md`) and publishes it as a GitHub Release with `install.sh`
+attached. `make release VERSION=vX.Y.Z` cuts the tag.

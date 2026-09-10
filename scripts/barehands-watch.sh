@@ -8,7 +8,8 @@
 # See barehands/DIAGNOSTICS.md.
 set -u
 BASE="${1:-http://localhost:8794}"
-DIAG="/workspaces/Jarvis/barehands/state/diag.jsonl"
+ROOT="${JARVIS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+DIAG="$ROOT/barehands/state/diag.jsonl"
 
 echo "══ barehands watch — $(date '+%H:%M:%S') ══"
 echo "health snapshot:"

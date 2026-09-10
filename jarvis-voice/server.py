@@ -49,7 +49,7 @@ from faster_whisper import WhisperModel  # noqa: E402
 from kokoro import KPipeline  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-AGENT_DIR = os.path.dirname(HERE)  # /workspaces/Jarvis
+AGENT_DIR = os.path.dirname(HERE)  # the Jarvis repo root
 BUS_STATE = os.path.join(AGENT_DIR, ".voice-bus", ".voice_state")
 DENY_SETTINGS = os.path.join(HERE, "voice-deny.json")
 TMP_WEBM = os.path.join(HERE, "tmp", "rec.webm")

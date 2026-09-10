@@ -2,7 +2,7 @@
   "name": "Jarvis",
   // The Universal image is what this stack has always run on (stock GitHub
   // Codespaces default): Node 22, Python 3.12, g++, gh, and git are all
-  // already present, so install-prereqs.sh mostly self-skips.
+  // already present, so the prereqs step mostly self-skips.
   "image": "mcr.microsoft.com/devcontainers/universal:2-linux",
 
   "features": {
@@ -10,12 +10,12 @@
     "ghcr.io/va-h/devcontainers-features/uv:1": {}
   },
 
-  // Runs once when the container is created. install-prereqs.sh is idempotent
-  // and non-interactive (system packages, gh, claude CLI). bootstrap.sh is
-  // deliberately NOT run here: it prompts for secrets (vault token, Spotify,
-  // Hubspace, ...) and needs a real terminal. Run it by hand after create:
-  //   bash scripts/bootstrap.sh
-  "onCreateCommand": "bash scripts/install-prereqs.sh || true",
+  // Runs once when the container is created. bootstrap/00-prereqs.sh is
+  // idempotent and non-interactive (system packages, uv, gh, claude CLI).
+  // The rest of the wizard is deliberately NOT run here: it prompts for
+  // secrets and needs a real terminal. Run it by hand after create:
+  //   make wizard      (or: bash bootstrap/wizard.sh)
+  "onCreateCommand": "bash bootstrap/00-prereqs.sh || true",
 
   // ai-visualizer 8790, jarvis-voice 8791 (internal), barehands 8794,
   // next-app dev server 3000.

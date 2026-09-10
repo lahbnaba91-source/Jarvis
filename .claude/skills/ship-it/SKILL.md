@@ -20,7 +20,7 @@ Lock that list. Every later step works through it.
 ## 1. Real contextual home for each change
 
 For each item in scope, find where it actually belongs:
-- **An existing note first.** Run `python3 /workspaces/Jarvis/scripts/vault-lookup/lookup.py "<the thing, in plain English>"` to find it. Append to it.
+- **An existing note first.** Run `python3 scripts/vault-lookup/lookup.py "<the thing, in plain English>"` (from the repo root) to find it. Append to it.
 - **A new note** in the right folder only if nothing existing is a logical home. Give it YAML frontmatter (`status` / `project` / `type`) — infer the values, never ask.
 - **A daily-note entry alone is NEVER the home.** The daily note is the log; the contextual note is the memory.
 
@@ -46,7 +46,7 @@ If step 0 found a real decision, append an entry to `HQ/05 - Resources/Reference
 
 ## 5. Drift scan
 
-Run `python3 /workspaces/Jarvis/scripts/vault-audit/audit.py`. Fix what it reports that's mechanically safe (a missing index bullet, inferred frontmatter, a dropped template heading). Leave judgment-heavy findings (orphans, ambiguous broken links) for Luis and say so.
+Run `python3 scripts/vault-audit/audit.py` (from the repo root). Fix what it reports that's mechanically safe (a missing index bullet, inferred frontmatter, a dropped template heading). Leave judgment-heavy findings (orphans, ambiguous broken links) for Luis and say so.
 
 Then eyeball the touched folder's index and any notes cross-referenced by what you changed — fix stale links or counts in the same pass.
 
