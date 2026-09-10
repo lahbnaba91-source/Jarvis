@@ -54,12 +54,14 @@ jobs:
           rm -f .claude/settings.json
           cd -
 
-          # Guard: no real persona / vault content leaked into the tarball.
-          if grep -rqiE 'Pacific|REDACTED' "dist/$STAGE"; then
-            echo "::error::personal content found in dist tree — aborting"; exit 1
+          # Guard: the shipped CLAUDE.md must be the placeholder template (the
+          # wizard renders it on the target machine), never a rendered personal
+          # one; and the vault must not be in the tarball.
+          if ! grep -q '@@ASSISTANT_NAME@@' "dist/$STAGE/CLAUDE.md"; then
+            echo "::error::dist CLAUDE.md is not the placeholder template — aborting"; exit 1
           fi
-          if [ -e "dist/$STAGE/HQ" ]; then
-            echo "::error::HQ/ present in dist tree — aborting"; exit 1
+          if [ -e "dist/$STAGE/HQ" ] || [ -e "dist/$STAGE/CLAUDE.vars" ]; then
+            echo "::error::vault or local persona values present in dist tree — aborting"; exit 1
           fi
 
           TARBALL="jarvis-dist-$TAG.tar.gz"
