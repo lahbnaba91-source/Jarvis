@@ -21,7 +21,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 @@JARVIS_ROOT@@/scripts/vault-audit/audit.py --quiet-if-clean || true"
+            "command": "if [ ! -f @@JARVIS_ROOT@@/CLAUDE.md ] && [ -f @@JARVIS_ROOT@@/CLAUDE.vars ]; then bash @@JARVIS_ROOT@@/scripts/render-claude-md.sh; fi"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 @@JARVIS_ROOT@@/scripts/vault-audit/audit.py --quiet-if-clean; rc=$?; [ \"$rc\" -eq 0 ] || [ \"$rc\" -eq 1 ]"
           }
         ]
       },
