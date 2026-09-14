@@ -1,9 +1,7 @@
 #!/bin/bash
-# Starts ai-visualizer (8790), jarvis-voice (8791), barehands (8794), and
-# BADGE (3000, internal only — not forwarded, barehands proxies to it for
-# the mission-control flight-dose visualization). Skips any service whose
-# port is already listening. None of these survive a codespace restart, so
-# this is the "bring the stack back up" command.
+# Starts ai-visualizer (8790), jarvis-voice (8791), and barehands (8794).
+# Skips any service whose port is already listening. None of these survive
+# a codespace restart, so this is the "bring the stack back up" command.
 set -uo pipefail
 
 # Repo root: honour an explicit JARVIS_ROOT, else self-locate from this script.
@@ -22,7 +20,6 @@ start() {
 start "ai-visualizer" 8790 "$ROOT/ai-visualizer" "python3 server.py --no-open" "$ROOT/.voice-bus/server.log"
 start "jarvis-voice"  8791 "$ROOT/jarvis-voice" ".venv/bin/python server.py" "$ROOT/jarvis-voice/tmp/server.log"
 start "barehands"     8794 "$ROOT/barehands" "python3 server.py" state/server.log
-BADGE_DB="$ROOT/services/badge/data/ledger.db" start "badge" 3000 "$ROOT/services/badge" "node --no-warnings server.js" "$ROOT/services/badge/data/server.log"
 
 echo "jarvis-voice takes a few seconds to warm models — tail tmp/server.log for 'jarvis-voice ready'."
 
