@@ -91,8 +91,8 @@ function evaluate(samples) {
 function main() {
   const samples = loadSamples();
   if (!samples.length) {
-    console.error(`no hand samples found in ${LOG_PATH} -- nothing to test`);
-    process.exit(1);
+    console.log(`no hand samples found in ${LOG_PATH} -- skipping (gitignored, not present in CI)`);
+    process.exit(0);
   }
 
   const { results, collisions } = evaluate(samples);
