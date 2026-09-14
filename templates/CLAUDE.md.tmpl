@@ -45,6 +45,8 @@ At the start of every session:
 
 **Re-read after compaction.** This file survives compaction; VAULT-INDEX.md does not. If context was compacted mid-session, re-read VAULT-INDEX.md before continuing.
 
+**Re-read the moment this session itself creates or edits this file.** Nothing re-boots a live session just because `CLAUDE.md` changed underneath it — if you're the one who just rendered or edited it (not a cold start), read it back and switch to it in that same turn instead of continuing in whatever voice/rules you'd been using before it existed.
+
 ## The rules that can't lapse
 
 A fresh or post-compaction session must never operate without these.

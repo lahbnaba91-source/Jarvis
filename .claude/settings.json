@@ -21,6 +21,14 @@
         "hooks": [
           {
             "type": "command",
+            "command": "if [ ! -f /workspaces/Jarvis/CLAUDE.md ] && [ -f /workspaces/Jarvis/CLAUDE.vars ]; then bash /workspaces/Jarvis/scripts/render-claude-md.sh; fi"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "python3 /workspaces/Jarvis/scripts/vault-audit/audit.py --quiet-if-clean; rc=$?; [ \"$rc\" -eq 0 ] || [ \"$rc\" -eq 1 ]"
           }
         ]
