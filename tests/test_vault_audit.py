@@ -23,6 +23,20 @@ def test_orphan_note_is_detected(audit_mod, messy_vault):
     assert "No Frontmatter.md" in orphans
 
 
+def test_vague_session_time_is_detected(audit_mod, messy_vault):
+    findings, _total, _count = audit_mod.audit(messy_vault)
+    flagged = {(f["note"], f["heading"]) for f in findings["vague_session_times"]}
+    assert ("01 - Daily Notes/2099-01-01.md", "morning") in flagged
+
+
+def test_real_and_unrecorded_session_times_are_not_flagged(audit_mod, messy_vault):
+    findings, _total, _count = audit_mod.audit(messy_vault)
+    headings = {f["heading"] for f in findings["vague_session_times"]
+                if f["note"] == "01 - Daily Notes/2099-01-01.md"}
+    assert "9:49 PM" not in headings
+    assert "time not recorded" not in headings
+
+
 def test_cli_exits_1_when_findings_exist(audit_script, messy_vault):
     r = subprocess.run(
         [sys.executable, audit_script, "--no-write", "--vault", messy_vault],

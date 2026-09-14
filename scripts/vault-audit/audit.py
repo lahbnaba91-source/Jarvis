@@ -21,13 +21,16 @@ Usage:
     audit.py --vault PATH    # audit a different vault root (testing)
 
 Exit code: 0 if the vault is clean, 1 if any finding was recorded, 2 on
-a usage/IO error.
+a usage/IO error, 3 if the audit itself crashed unexpectedly (a bug in
+this script, not a finding about the vault -- callers must not treat
+this the same as "1 finding recorded").
 """
 import argparse
 import json
 import os
 import re
 import sys
+import traceback
 from datetime import datetime
 
 try:
@@ -73,6 +76,22 @@ DAILY_REQUIRED_HEADINGS = ["## Index", "### What Got Done",
                            "### Notes Touched"]
 DAILY_NAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.md$")
 TEMPLATE_BASENAME = "daily note template"
+
+# Daily Note Template.md: "Timestamp every session heading with Luis's
+# local time (Pacific), never UTC." A session heading looks like
+# "## Session 1 -- 9:49 PM: topic" (an em-dash or double-hyphen before
+# the time label, a colon after it, and the time itself may contain a
+# colon -- "9:49 PM"). SESSION_HEADING_RE captures the whole remainder
+# of the line so a HH:MM colon can't be mistaken for the label/topic
+# separator; validity is decided by what the remainder *starts with*,
+# and DISPLAY_LABEL_RE only trims that remainder for the report text.
+SESSION_HEADING_RE = re.compile(
+    r"^##\s*Session\s+\d+\s*[—–-]{1,2}\s*(.+?)\s*$", re.MULTILINE)
+DISPLAY_LABEL_RE = re.compile(r"^([^:\n]*):")
+# 12-hour ("9:49 PM") and 24-hour ("19:30", "02:47") are both real times
+# the vault has used historically -- AM/PM is optional.
+CLOCK_TIME_RE = re.compile(r"^\d{1,2}:\d{2}(\s*[AaPp]\.?[Mm]\.?\b)?")
+HONEST_UNKNOWN = ("time not recorded", "[time unspecified]")
 
 
 def now_pacific():
@@ -166,6 +185,7 @@ def audit(vault):
         "missing_frontmatter": [],
         "orphans": [],
         "daily_note_shape": [],
+        "vague_session_times": [],
     }
 
     known_names = set(by_name.keys())
@@ -296,6 +316,25 @@ def audit(vault):
                 "missing_headings": missing,
             })
 
+    # --- vague session times ------------------------------------------------
+    for n in notes:
+        if not n["path"].startswith("01 - Daily Notes" + os.sep):
+            continue
+        if not DAILY_NAME_RE.match(n["fname"]):
+            continue
+        for m in SESSION_HEADING_RE.finditer(n["text"]):
+            remainder = m.group(1).strip()
+            if CLOCK_TIME_RE.match(remainder):
+                continue  # starts with a real clock time, e.g. "9:49 PM"
+            if remainder.lower().startswith(HONEST_UNKNOWN):
+                continue  # explicit, honest -- not a guess dressed as one
+            dm = DISPLAY_LABEL_RE.match(remainder)
+            label = dm.group(1).strip() if dm else remainder
+            findings["vague_session_times"].append({
+                "note": n["path"],
+                "heading": label,
+            })
+
     total = sum(len(v) for v in findings.values())
     return findings, total, len(notes)
 
@@ -306,10 +345,14 @@ LABELS = {
     "missing_frontmatter": "Missing frontmatter",
     "orphans": "Orphan notes",
     "daily_note_shape": "Daily notes off-template",
+    "vague_session_times": "Vague session-heading times",
 }
 
 # Which finding types a session can safely auto-fix vs. which need a
 # human-in-the-loop call. Printed in the report so the split is explicit.
+# vague_session_times is deliberately NOT auto-fixable: filling in a real
+# time needs actual evidence (matching commit, Luis's own recollection),
+# never a plausible-looking guess -- see 2026-09-13's daily note history.
 SAFE_FIX = {"index_drift", "missing_frontmatter", "daily_note_shape"}
 
 
@@ -392,6 +435,19 @@ def render_report(findings, total, note_count):
             lines.append(f"- `{f['note']}` -- missing {miss}")
         lines.append("")
 
+    if findings["vague_session_times"]:
+        lines += ["## Vague session-heading times", "",
+                  "A `## Session N -- [label]:` heading whose label isn't a "
+                  "real clock time (e.g. \"morning\"/\"evening\"/\"night\") or "
+                  "the explicit `time not recorded`. Fill in Luis's actual "
+                  "Pacific time when it's known; if reconstructing a past "
+                  "note, use real evidence (a matching commit, Luis's own "
+                  "recollection) -- never a guessed time that looks precise.",
+                  ""]
+        for f in findings["vague_session_times"]:
+            lines.append(f"- `{f['note']}` -- \"{f['heading']}\"")
+        lines.append("")
+
     return "\n".join(lines) + "\n"
 
 
@@ -424,7 +480,16 @@ def main():
         print(f"error: vault not found: {args.vault}", file=sys.stderr)
         sys.exit(2)
 
-    findings, total, note_count = audit(args.vault)
+    try:
+        findings, total, note_count = audit(args.vault)
+    except Exception:
+        # A crash here is a bug in the audit, not a finding about the
+        # vault -- it must exit with a code distinct from "1 finding
+        # recorded" (SystemExit from the checks above is unaffected:
+        # it isn't an Exception subclass, so it isn't caught here).
+        print("error: audit crashed unexpectedly:", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(3)
 
     if not args.no_write:
         report_path = os.path.join(args.vault, REPORT_REL)

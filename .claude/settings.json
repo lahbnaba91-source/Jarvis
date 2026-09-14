@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /workspaces/Jarvis/scripts/vault-audit/audit.py --quiet-if-clean || true"
+            "command": "python3 /workspaces/Jarvis/scripts/vault-audit/audit.py --quiet-if-clean; rc=$?; [ \"$rc\" -eq 0 ] || [ \"$rc\" -eq 1 ]"
           }
         ]
       },
