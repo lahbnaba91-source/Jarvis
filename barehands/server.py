@@ -76,11 +76,18 @@ import secrets
 import subprocess
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+# BADGE (services/badge/server.js) — internal only, never forwarded. Mission
+# control (board.sh badge_flight) proxies through here the same way the
+# ai-visualizer server proxies to jarvis-voice, so the browser only ever
+# talks to this one already-forwarded port.
+BADGE_URL = "http://127.0.0.1:3000"
 
 # Hubspace lamp control lives outside this vendored tree (its own venv,
 # its own gitignored cached session) -- see scripts/hubspace/hubspace_light.py.
@@ -509,6 +516,27 @@ def spotify_call(*args):
         return {"error": str(e)}, 502
 
 
+def badge_call(path, method="GET", body=None):
+    """Proxy one request to BADGE's real HTTP API (port 3000, internal),
+    return (result_dict, http_code). Unlike spotify/hubspace above, BADGE
+    is already a persistent server, not a one-shot script — a real HTTP
+    forward, not a subprocess call."""
+    try:
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(
+            BADGE_URL + path, data=data, method=method,
+            headers={"Content-Type": "application/json"} if data else {})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode() or "{}"), resp.status
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read().decode() or "{}"), e.code
+        except Exception:
+            return {"error": str(e)}, e.code
+    except Exception as e:
+        return {"error": f"BADGE unreachable: {e}"}, 502
+
+
 def hubspace_call(action, *args):
     """Run hubspace_light.py <action> [args...], return (result_dict, http_code)."""
     try:
@@ -660,7 +688,7 @@ _DEV_CAPTURE = False
 _DEV_CAPTURE_LABEL = None
 _ALLOWED = ("add_img", "add_card", "clear", "reset", "hand", "give",
             "yank", "hover", "scroll_note", "widget", "explode", "assemble",
-            "present")
+            "present", "badge_flight")
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -777,6 +805,18 @@ class Handler(SimpleHTTPRequestHandler):
             self._json({"error": f"body too large (max {MAX_BODY // (1024 * 1024)}MB)"}, 413)
             return
         body = self.rfile.read(n) if n > 0 else b"{}"
+        if self.path == "/badge/project":
+            # live dose projection for a route not in the ledger yet
+            # (origin/destination/date/cruiseAltitudeFt) -> BADGE's
+            # /api/badge/project. Same samples[] shape as a logged flight.
+            try:
+                payload = json.loads(body or b"{}")
+            except Exception:
+                self._json({"error": "bad JSON"}, 400)
+                return
+            result, code = badge_call("/api/badge/project", method="POST", body=payload)
+            self._json(result, code)
+            return
         if self.path == "/diag":
             # diagnostics sink -- see the DIAGNOSTICS block up top. Never
             # touches board/persisted state; best-effort, always 204.
@@ -1051,6 +1091,13 @@ class Handler(SimpleHTTPRequestHandler):
         global _DEV_CAPTURE, _DEV_CAPTURE_LABEL
         if self.path == "/light/status":
             result, code = hubspace_call("get")
+            self._json(result, code)
+            return
+        if self.path.startswith("/badge/flights"):
+            # /badge/flights[?limit=..] or /badge/flights/<id> -> BADGE's
+            # /api/badge/flights[...]. Straight passthrough, path + query
+            # string both forwarded as-is.
+            result, code = badge_call("/api/badge" + self.path[len("/badge"):])
             self._json(result, code)
             return
         if self.path == "/spotify/status":
