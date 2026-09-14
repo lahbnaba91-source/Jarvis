@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /workspaces/Jarvis/scripts/session/guard.sh register || true"
+            "command": "bash /workspaces/Jarvis/scripts/session/guard.sh register"
           }
         ]
       }
