@@ -26,6 +26,7 @@ import random
 import re
 import time
 import wave
+from datetime import date
 
 logging.basicConfig(level=logging.INFO)
 
@@ -108,6 +109,18 @@ _turn_log: list[dict] = []
 # query()/receive_response() pairs against it would interleave and desync the
 # message stream, so every turn is serialized through here.
 _turn_lock = asyncio.Lock()
+
+# _sdk_client used to live for the whole process lifetime — created once at
+# startup, only disconnected on shutdown — so every turn dragged the entire
+# day's accumulated conversation forward. Cheap per turn on Haiku, but it
+# compounds all day. Reset it after RESET_AFTER_TURNS turns or on a calendar
+# day rollover, whichever comes first, plus a manual /new for the board.
+# Tradeoff (accepted): a reset drops same-day conversational memory in
+# voice — the vault covers continuity, so this is a token-spend fix, not a
+# feature loss.
+RESET_AFTER_TURNS = 40
+_turn_count = 0
+_session_date: date | None = None
 
 
 def set_bus_state(state: str) -> None:
@@ -231,7 +244,7 @@ async def synth_wav(text: str) -> bytes:
 
 
 async def get_sdk_client() -> ClaudeSDKClient:
-    global _sdk_client
+    global _sdk_client, _session_date
     if _sdk_client is None:
         opts = ClaudeAgentOptions(
             cwd=AGENT_DIR,
@@ -244,7 +257,23 @@ async def get_sdk_client() -> ClaudeSDKClient:
         )
         _sdk_client = ClaudeSDKClient(options=opts)
         await _sdk_client.connect()
+        _session_date = date.today()
     return _sdk_client
+
+
+def _should_reset() -> bool:
+    return (_turn_count >= RESET_AFTER_TURNS
+            or (_session_date is not None and _session_date != date.today()))
+
+
+async def reset_sdk_client() -> None:
+    """Tear down the current SDK connection so the next get_sdk_client()
+    rebuilds a fresh one. Safe to call when there's no client yet."""
+    global _sdk_client, _turn_count
+    if _sdk_client is not None:
+        await _sdk_client.disconnect()
+        _sdk_client = None
+    _turn_count = 0
 
 
 async def ask_claude(text: str) -> tuple[str, dict]:
@@ -324,14 +353,20 @@ async def handle_stop(request: web.Request) -> web.Response:
         return web.json_response({"text": "", "reply": "", "audio_b64": ""})
 
     set_bus_state("thinking")
+    global _turn_count
     try:
         async with _turn_lock:
+            if _should_reset():
+                logging.info("[voice] resetting SDK session (turns=%d, date=%s)",
+                             _turn_count, _session_date)
+                await reset_sdk_client()
             # A hung SDK turn (stale message-pipe state, dropped
             # subprocess, whatever) must never leave the bus stuck on
             # "thinking" forever with no way out — that's a silent-hang
             # class of bug, not a normal exception, so it needs its own
             # guard rather than relying on the except below to catch it.
             reply, usage = await asyncio.wait_for(ask_claude(text), timeout=45)
+            _turn_count += 1
         t_claude = time.monotonic()
         # Same reasoning as the ask_claude timeout above — confirmed live: a
         # real turn got stuck here with 0% CPU (not computing, genuinely
@@ -402,6 +437,14 @@ async def handle_logs(request: web.Request) -> web.Response:
     return web.json_response({"turns": list(reversed(_turn_log))})
 
 
+async def handle_new(request: web.Request) -> web.Response:
+    """Manual session reset, for the board to trigger on demand — same
+    effect as the automatic turn-count/day-rollover reset in handle_stop."""
+    async with _turn_lock:
+        await reset_sdk_client()
+    return web.json_response({"ok": True, "reset": True})
+
+
 async def on_startup(app: web.Application) -> None:
     set_bus_state("idle")
     await asyncio.to_thread(warm_whisper)
@@ -422,6 +465,7 @@ def main():
     app.router.add_post("/stop", handle_stop)
     app.router.add_post("/demo", handle_demo)
     app.router.add_get("/logs", handle_logs)
+    app.router.add_post("/new", handle_new)
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
     web.run_app(app, host="127.0.0.1", port=8791)
