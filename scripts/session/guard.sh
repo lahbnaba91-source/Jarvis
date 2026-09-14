@@ -25,9 +25,11 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "${JARVIS_ROOT:-$(cd "$here/../.." && pwd)}")"
 reg_dir="$repo_root/.claude/sessions"
 
-# The SessionStart hook runs as a child of the Claude Code process, so $PPID is a
-# stable per-session key for the lifetime of that session.
-me_pid="${JARVIS_SESSION_PID:-$PPID}"
+# Claude Code exports CLAUDE_PID with the pid of the long-lived `claude`
+# process itself — that's the stable per-session key. $PPID only sees the
+# short-lived shell that runs this hook command and is dead moments later,
+# which silently broke every existing registration.
+me_pid="${CLAUDE_PID:-${JARVIS_SESSION_PID:-$PPID}}"
 
 tree_of()   { git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null || echo "$repo_root"; }
 branch_of() { git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?"; }
