@@ -72,7 +72,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
-      # No package.json — the tests are pure-Node, no deps, no fixtures.
+      # No package.json — the tests are pure-Node, no deps. test-gestures.js
+      # does use a checked-in fixture (test/fixtures/) when the gitignored
+      # live gesture log isn't present, which is always true here.
       - run: node test/test-smoothing.js
       - run: node test/test-gestures.js
 
