@@ -4,23 +4,37 @@
 // `node test/test-gestures.js` from the barehands folder -- same
 // "nothing to install" rule as the rest of this repo.
 //
-// Checks two things against every real hand shape ever RECORDed
-// (../state/gesture_log.jsonl):
+// Checks two things, against two sources:
 //
-//   1. COLLISIONS -- does any single real hand shape satisfy two or
-//      more of these single-hand pose gates at once? Each pose is
-//      supposed to represent one distinguishable shape; a real
-//      recorded hand tripping two gates simultaneously is exactly the
-//      kind of bug that cost several live-testing round-trips before
-//      this harness existed (the dun-dun pose silently also reading as
-//      a force-pull charge). Fails loudly if found.
+//   - fixtures/gesture-samples.jsonl -- the tracked, checked-in regression
+//     corpus. This is the one CI runs, so it's ALWAYS checked here too,
+//     on every machine, regardless of what else is present. Its baseline
+//     is the tracked fixtures/gesture-samples.snapshot.json.
+//   - ../state/gesture_log.jsonl -- your gitignored, machine-local
+//     recording log, checked IN ADDITION when it has samples (never
+//     required, never seen by CI). Its baseline is the gitignored
+//     gestures.snapshot.json.
 //
-//   2. SNAPSHOT -- a checked-in baseline (gestures.snapshot.json) of
-//      which poses fire on which recorded sample. A future threshold
-//      change that silently flips a real recorded sample's behavior
-//      shows up as a diff here instead of shipping unnoticed.
-//      Run with --update to regenerate the baseline after a
-//      deliberate, verified change.
+// The two checks are independent: a broken pose gate that only shows up
+// against the fixture can't hide just because a dev machine also has a
+// large personal log, and vice versa.
+//
+//   1. COLLISIONS -- does any single hand shape satisfy two or more of
+//      these single-hand pose gates at once? Each pose is supposed to
+//      represent one distinguishable shape; a real recorded hand
+//      tripping two gates simultaneously is exactly the kind of bug
+//      that cost several live-testing round-trips before this harness
+//      existed (the dun-dun pose silently also reading as a force-pull
+//      charge). Fails loudly if found.
+//
+//   2. SNAPSHOT -- a checked-in baseline of which poses fire on which
+//      sample. A future threshold change that silently flips a
+//      sample's behavior shows up as a diff here instead of shipping
+//      unnoticed. Run with --update-fixture to deliberately regenerate
+//      the tracked fixture baseline, or --update for your personal
+//      log's baseline (requires a live log with samples) -- kept as two
+//      separate flags on purpose so refreshing your own baseline can
+//      never accidentally overwrite the shared, CI-relied-upon one.
 "use strict";
 
 const fs = require("fs");
@@ -28,8 +42,11 @@ const path = require("path");
 const G = require(path.join(__dirname, "..", "gestures.js"));
 
 const LOG_PATH = path.join(__dirname, "..", "state", "gesture_log.jsonl");
+const FIXTURE_PATH = path.join(__dirname, "fixtures", "gesture-samples.jsonl");
 const SNAPSHOT_PATH = path.join(__dirname, "gestures.snapshot.json");
+const FIXTURE_SNAPSHOT_PATH = path.join(__dirname, "fixtures", "gesture-samples.snapshot.json");
 const UPDATE = process.argv.includes("--update");
+const UPDATE_FIXTURE = process.argv.includes("--update-fixture");
 
 const POSES = {
   rockSign: G.rockSign,
@@ -62,9 +79,9 @@ function* findHands(node, key) {
   }
 }
 
-function loadSamples() {
-  if (!fs.existsSync(LOG_PATH)) return [];
-  const lines = fs.readFileSync(LOG_PATH, "utf8").trim().split("\n").filter(Boolean);
+function loadSamplesFrom(logPath) {
+  if (!fs.existsSync(logPath)) return [];
+  const lines = fs.readFileSync(logPath, "utf8").trim().split("\n").filter(Boolean);
   const samples = [];
   lines.forEach((line, li) => {
     let entry;
@@ -88,31 +105,34 @@ function evaluate(samples) {
   return { results, collisions };
 }
 
-function main() {
-  const samples = loadSamples();
-  if (!samples.length) {
-    console.log(`no hand samples found in ${LOG_PATH} -- skipping (gitignored, not present in CI)`);
-    process.exit(0);
-  }
-
+// Runs both checks (collision + snapshot) for one source and reports
+// against its own baseline. `updateFlag` is this source's own flag
+// (--update-fixture for the fixture, --update for the live log) so a
+// snapshot is only ever refreshed by the flag that names it. Returns
+// { collisionFailed, snapshotFailed } separately -- only a snapshot diff
+// is fixable by re-running with the update flag, so the caller must not
+// suggest that remedy for a collision failure, which is a real gesture-
+// detection bug the update flag can't do anything about.
+function checkSource(label, samples, logPath, snapshotPath, updateFlag) {
   const { results, collisions } = evaluate(samples);
-  console.log(`checked ${samples.length} real hand samples from ${path.relative(process.cwd(), LOG_PATH)}`);
+  console.log(`[${label}] checked ${samples.length} hand samples from ${path.relative(process.cwd(), logPath)}`);
 
-  let failed = false;
+  let collisionFailed = false;
+  let snapshotFailed = false;
 
   if (collisions.length) {
-    failed = true;
-    console.error(`\nFAIL -- COLLISION: ${collisions.length} sample(s) fired more than one pose gate at once:`);
+    collisionFailed = true;
+    console.error(`[${label}] FAIL -- COLLISION: ${collisions.length} sample(s) fired more than one pose gate at once:`);
     collisions.forEach(c => console.error(`  ${c.id} (ts ${c.ts}): ${c.fired.join(" + ")}`));
   } else {
-    console.log("PASS -- no collisions: every recorded sample fires at most one pose gate");
+    console.log(`[${label}] PASS -- no collisions: every sample fires at most one pose gate`);
   }
 
-  if (UPDATE) {
-    fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(results, null, 2) + "\n");
-    console.log(`\nsnapshot written: ${path.relative(process.cwd(), SNAPSHOT_PATH)} (${Object.keys(results).length} samples)`);
-  } else if (fs.existsSync(SNAPSHOT_PATH)) {
-    const baseline = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf8"));
+  if (updateFlag) {
+    fs.writeFileSync(snapshotPath, JSON.stringify(results, null, 2) + "\n");
+    console.log(`[${label}] snapshot written: ${path.relative(process.cwd(), snapshotPath)} (${Object.keys(results).length} samples)`);
+  } else if (fs.existsSync(snapshotPath)) {
+    const baseline = JSON.parse(fs.readFileSync(snapshotPath, "utf8"));
     const diffs = [];
     for (const id of Object.keys(results)) {
       const before = JSON.stringify(baseline[id] || []);
@@ -123,15 +143,58 @@ function main() {
       if (!(id in results)) diffs.push({ id, before: baseline[id], after: null, missing: true });
     }
     if (diffs.length) {
-      failed = true;
-      console.error(`\nFAIL -- SNAPSHOT DIFF: ${diffs.length} sample(s) changed behavior vs the checked-in baseline:`);
+      snapshotFailed = true;
+      console.error(`[${label}] FAIL -- SNAPSHOT DIFF: ${diffs.length} sample(s) changed behavior vs the checked-in baseline:`);
       diffs.forEach(d => console.error(`  ${d.id}: ${JSON.stringify(d.before)} -> ${d.missing ? "MISSING" : JSON.stringify(d.after)}`));
-      console.error(`\nIf this change was intentional: node test/test-gestures.js --update`);
     } else {
-      console.log(`PASS -- matches checked-in snapshot (${Object.keys(baseline).length} samples)`);
+      console.log(`[${label}] PASS -- matches checked-in snapshot (${Object.keys(baseline).length} samples)`);
     }
   } else {
-    console.log(`\nno baseline yet -- run with --update to create ${path.relative(process.cwd(), SNAPSHOT_PATH)}`);
+    console.log(`[${label}] no baseline yet -- run with the update flag to create ${path.relative(process.cwd(), snapshotPath)}`);
+  }
+
+  return { collisionFailed, snapshotFailed };
+}
+
+function main() {
+  let failed = false;
+
+  // Fixture: the tracked, CI-authoritative regression corpus. Always
+  // checked, on every machine, whether or not a live log also exists --
+  // this is what closes the original CI-no-op gap and what
+  // --update-fixture always targets.
+  const fixtureSamples = loadSamplesFrom(FIXTURE_PATH);
+  if (!fixtureSamples.length) {
+    console.log(`no hand samples found in fixture ${FIXTURE_PATH} -- nothing to test`);
+    process.exit(1);
+  }
+  {
+    const { collisionFailed, snapshotFailed } = checkSource(
+      "fixture", fixtureSamples, FIXTURE_PATH, FIXTURE_SNAPSHOT_PATH, UPDATE_FIXTURE);
+    if (collisionFailed || snapshotFailed) failed = true;
+    if (snapshotFailed) console.error("If this change was intentional: node test/test-gestures.js --update-fixture");
+  }
+
+  console.log("");
+
+  // Live log: your gitignored, machine-local recording data. Checked in
+  // addition to the fixture whenever it has samples; never required, and
+  // CI never has one.
+  const liveSamples = loadSamplesFrom(LOG_PATH);
+  if (liveSamples.length) {
+    const { collisionFailed, snapshotFailed } = checkSource(
+      "live log", liveSamples, LOG_PATH, SNAPSHOT_PATH, UPDATE);
+    if (collisionFailed || snapshotFailed) failed = true;
+    if (snapshotFailed) console.error("If this change was intentional: node test/test-gestures.js --update");
+  } else if (UPDATE) {
+    const reason = fs.existsSync(LOG_PATH)
+      ? `log at ${LOG_PATH} exists but has no usable hand samples`
+      : `no live log at ${LOG_PATH}`;
+    console.error(`[live log] ${reason} -- nothing of yours to update with --update.`);
+    console.error("[live log] --update-fixture instead regenerates the tracked fixture baseline (already handled above).");
+    failed = true;
+  } else {
+    console.log(`[live log] ${LOG_PATH} not present or empty -- skipping (fixture check above already ran)`);
   }
 
   process.exit(failed ? 1 : 0);
