@@ -246,11 +246,13 @@ check_guard() {
     pids="${pids:+$pids,}$pid"
   done < <(printf '%s\n' "$out" | awk '$1=="pid" && $2 !~ /\(this\)/ {print $2, $4}')
   local n=0; [ -n "$pids" ] && n=$(printf '%s\n' "$pids" | tr ',' '\n' | wc -l)
-  # A Claude session running this from the main tree is one of the sessions too.
+  # A Claude session running this from the main tree is one of the sessions
+  # too — unless it's jarvis-voice's Agent SDK claude (e.g. a voice-asked check).
   local self=0
   local self_cwd; self_cwd=$(readlink "/proc/${CLAUDE_PID:-0}/cwd" 2>/dev/null)
   if [ -n "$self_cwd" ] && [ "$(git -C "$self_cwd" rev-parse --show-toplevel 2>/dev/null)" = "$ROOT" ] \
-     && ! printf ',%s,' "$pids" | grep -q ",$CLAUDE_PID,"; then self=1; fi
+     && ! printf ',%s,' "$pids" | grep -q ",$CLAUDE_PID," \
+     && ! tr '\0' ' ' < "/proc/$CLAUDE_PID/cmdline" 2>/dev/null | grep -q 'claude_agent_sdk/'; then self=1; fi
   if [ $(( n + self )) -ge 2 ]; then
     rec "session-guard" WARN "$(( n + self )) live sessions on $ROOT (pids ${pids:-none}$([ "$self" = 1 ] && printf ', plus this one')) — isolate before branch ops"
   else
