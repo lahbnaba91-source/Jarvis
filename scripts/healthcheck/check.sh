@@ -35,6 +35,13 @@ for a in "$@"; do
   esac
 done
 
+# jarvis-voice's Agent SDK claude fires the SessionStart hooks too; running
+# the hook-mode check there just adds ~5s to every voice session start and
+# its output goes nowhere a human reads. Skip it (a manual run still works).
+if [ "$QUIET" = 1 ] && tr '\0' ' ' < "/proc/${CLAUDE_PID:-0}/cmdline" 2>/dev/null | grep -q 'claude_agent_sdk/'; then
+  exit 0
+fi
+
 # The live stack and its gitignored runtime state (logs, cues, tokens, the
 # HQ vault) always sit in the main checkout, even when this script runs
 # from a worktree — so resolve the main tree via git's common dir.

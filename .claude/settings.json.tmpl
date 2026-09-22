@@ -40,6 +40,14 @@
             "command": "bash @@JARVIS_ROOT@@/scripts/session/guard.sh register"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash @@JARVIS_ROOT@@/scripts/healthcheck/check.sh --quick --quiet-if-clean; true"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
