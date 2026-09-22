@@ -31,6 +31,12 @@ reg_dir="$repo_root/.claude/sessions"
 # which silently broke every existing registration.
 me_pid="${CLAUDE_PID:-${JARVIS_SESSION_PID:-$PPID}}"
 
+# jarvis-voice talks to Claude through the Agent SDK, which runs its own
+# bundled `claude` from this tree — so it fires the SessionStart hooks too and
+# used to register as a phantom "other session". It's a subprocess of the voice
+# server, not a session anyone types into: never register or count it.
+is_sdk_claude() { tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null | grep -q 'claude_agent_sdk/'; }
+
 tree_of()   { git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null || echo "$repo_root"; }
 branch_of() { git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?"; }
 
@@ -41,7 +47,7 @@ prune_dead() {
     [ -e "$f" ] || continue
     pid="$(basename "$f")"
     case "$pid" in *[!0-9]*) rm -f "$f"; continue;; esac
-    kill -0 "$pid" 2>/dev/null || rm -f "$f"
+    if ! kill -0 "$pid" 2>/dev/null || is_sdk_claude "$pid"; then rm -f "$f"; fi
   done
 }
 
@@ -103,6 +109,7 @@ cmd="${1:-register}"
 case "$cmd" in
   register)
     prune_dead
+    is_sdk_claude "$me_pid" && exit 0
     write_self
     hits="$(same_tree_others || true)"
     if [ -n "$hits" ]; then

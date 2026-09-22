@@ -238,13 +238,11 @@ check_guard() {
   if ! grep -q "guard.sh register" "$ROOT/.claude/settings.json" 2>/dev/null; then
     rec "session-guard" FAIL "guard.sh runs, but register hook missing from .claude/settings.json"; return
   fi
-  # Registered sessions on the main tree, minus list's own "(this)" row and
-  # jarvis-voice's bundled Agent SDK `claude` (it fires the SessionStart hooks
-  # too, but it's a subprocess of the voice server, not a session).
+  # Registered sessions on the main tree, minus list's own "(this)" row.
+  # (guard.sh itself drops jarvis-voice's Agent SDK `claude` from the registry.)
   local pids="" pid tree
   while read -r pid tree; do
     [ "$tree" = "$ROOT" ] || continue
-    tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q claude_agent_sdk && continue
     pids="${pids:+$pids,}$pid"
   done < <(printf '%s\n' "$out" | awk '$1=="pid" && $2 !~ /\(this\)/ {print $2, $4}')
   local n=0; [ -n "$pids" ] && n=$(printf '%s\n' "$pids" | tr ',' '\n' | wc -l)
