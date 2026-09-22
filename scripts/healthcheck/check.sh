@@ -94,17 +94,22 @@ check_voice() {
 import base64, json, sys
 try:
     r = json.load(open(sys.argv[1]))
+    if not isinstance(r, dict):
+        raise ValueError(f"expected an object, got {type(r).__name__}")
+    text, reply, audio = r.get("text", ""), r.get("reply", ""), r.get("audio_b64", "")
+    wav = bool(audio) and base64.b64decode(audio)[:4] == b"RIFF"
 except Exception as e:
-    print(f"FAIL|/stop returned no JSON ({e})"); sys.exit()
-text, reply, audio = r.get("text", ""), r.get("reply", ""), r.get("audio_b64", "")
-wav = base64.b64decode(audio)[:4] == b"RIFF" if audio else False
+    print(f"FAIL|/stop returned an unusable response ({e})"); sys.exit()
 if text and reply and wav:
     print(f"PASS|round trip ok — heard {text[:40]!r}, replied {reply[:40]!r}, WAV returned")
 else:
     print(f"FAIL|round trip incomplete — text={bool(text)} reply={bool(reply)} wav={wav} err={r.get('error', '')}")
 PY
 )
-  rec "jarvis-voice" "${verdict%%|*}" "${verdict#*|}"
+  case "$verdict" in
+    PASS\|*|FAIL\|*) rec "jarvis-voice" "${verdict%%|*}" "${verdict#*|}" ;;
+    *) rec "jarvis-voice" FAIL "round trip: response parser crashed" ;;
+  esac
   rm -rf "$tmp"
 }
 
@@ -150,10 +155,13 @@ check_sync() {
   fi
   local out rc
   out=$(timeout 90 python3 "$ROOT/scripts/push-hq-vault.py" 2>&1); rc=$?
-  if [ "$rc" = 0 ] && printf '%s' "$out" | grep -q "Dry run only"; then
-    local n; n=$(printf '%s\n' "$out" | grep -cE '^  [~+-] ')
+  if [ "$rc" = 0 ] && printf '%s' "$out" | grep -qE "Dry run only|Nothing to push"; then
+    # The generated reports (this script's and vault-audit's) are rewritten
+    # every run, so they'd keep this check on WARN forever — don't count them.
+    local n; n=$(printf '%s\n' "$out" | grep -E '^  [~+-] ' \
+      | grep -vcE '07 - Systems Status/(Health Check Report|Vault Audit)\.md$')
     if [ "$n" = 0 ]; then
-      rec "hq-vault-sync" PASS "dry run ok, local vault matches GitHub"
+      rec "hq-vault-sync" PASS "dry run ok, vault matches GitHub (generated reports aside)"
     else
       rec "hq-vault-sync" WARN "dry run ok, but $n file(s) differ from GitHub — review the plan before --apply"
     fi
@@ -190,10 +198,12 @@ check_quota() {
   fi
   l=$(bash "$ROOT/scripts/claude-quota/account.sh" list 2>&1)
   local five; five=$(printf '%s\n' "$u" | awk '/5-hour/{for(i=1;i<=NF;i++) if($i ~ /%$/) {print $i; exit}}')
-  local accts; accts=$(printf '%s\n' "$l" | awk '/refresh token ~[0-9]+d left/{match($0,/~[0-9]+d/); print $1 "=" substr($0,RSTART+1,RLENGTH-2) "d"}' | paste -sd' ' -)
-  local low; low=$(printf '%s\n' "$l" | grep -oE '~[0-9]+d left' | tr -dc '0-9\n' | sort -n | head -1)
+  local accts; accts=$(printf '%s\n' "$l" | awk '/refresh token ~-?[0-9]+d left/{match($0,/~-?[0-9]+d/); print $1 "=" substr($0,RSTART+1,RLENGTH-2) "d"}' | paste -sd' ' -)
+  local low; low=$(printf '%s\n' "$l" | grep -oE '~-?[0-9]+d left' | tr -dc -- '-0-9\n' | sort -n | head -1)
   if [ -z "$accts" ]; then
     rec "claude-quota" WARN "5h at $five, but no saved account snapshots with a known expiry"
+  elif [ "${low:-0}" -le 0 ]; then
+    rec "claude-quota" FAIL "5h at $five; a saved account's refresh token has expired ($accts) — redo watch-login.sh"
   elif [ "${low:-0}" -le 5 ]; then
     rec "claude-quota" WARN "5h at $five; refresh token expiring soon ($accts) — redo watch-login.sh"
   else
@@ -204,7 +214,7 @@ check_quota() {
 # ── 8. vault-audit ───────────────────────────────────────────────────────
 check_audit() {
   local out rc
-  out=$(python3 "$ROOT/scripts/vault-audit/audit.py" --vault "$VAULT" --no-write --json 2>&1); rc=$?
+  out=$(python3 "$ROOT/scripts/vault-audit/audit.py" --vault "$VAULT" --json 2>&1); rc=$?
   case "$rc" in
     0) rec "vault-audit" PASS "0 findings" ;;
     1) local n; n=$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["total"])' 2>/dev/null)
@@ -214,18 +224,35 @@ check_audit() {
 }
 
 # ── 9. session guard ─────────────────────────────────────────────────────
+# Uses `guard.sh list`, never the default `register` — a health check must
+# not write itself into the session registry.
 check_guard() {
   local out rc
-  out=$(bash "$ROOT/scripts/session/guard.sh" 2>&1); rc=$?
+  out=$(bash "$ROOT/scripts/session/guard.sh" list 2>&1); rc=$?
   if [ "$rc" != 0 ]; then
-    rec "session-guard" FAIL "guard.sh rc=$rc"
-  elif ! grep -q "guard.sh register" "$ROOT/.claude/settings.json" 2>/dev/null; then
-    rec "session-guard" FAIL "guard.sh runs, but register hook missing from .claude/settings.json"
-  elif printf '%s' "$out" | grep -q "ANOTHER JARVIS SESSION"; then
-    local pids; pids=$(printf '%s\n' "$out" | grep -oE 'pid [0-9]+' | paste -sd, -)
-    rec "session-guard" WARN "other live session(s) on this tree: $pids — isolate before branch ops"
+    rec "session-guard" FAIL "guard.sh list rc=$rc"; return
+  fi
+  if ! grep -q "guard.sh register" "$ROOT/.claude/settings.json" 2>/dev/null; then
+    rec "session-guard" FAIL "guard.sh runs, but register hook missing from .claude/settings.json"; return
+  fi
+  # Registered sessions on the main tree, minus list's own "(this)" row and
+  # jarvis-voice's bundled Agent SDK `claude` (it fires the SessionStart hooks
+  # too, but it's a subprocess of the voice server, not a session).
+  local pids="" pid tree
+  while read -r pid tree; do
+    [ "$tree" = "$ROOT" ] || continue
+    tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q claude_agent_sdk && continue
+    pids="${pids:+$pids,}$pid"
+  done < <(printf '%s\n' "$out" | awk '$1=="pid" && $2 !~ /\(this\)/ {print $2, $4}')
+  local n=0; [ -n "$pids" ] && n=$(printf '%s\n' "$pids" | tr ',' '\n' | wc -l)
+  # A Claude session running this from the main tree is one of the sessions too.
+  local self=0
+  if [ -n "${CLAUDE_PID:-}" ] && [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "$ROOT" ] \
+     && ! printf ',%s,' "$pids" | grep -q ",$CLAUDE_PID,"; then self=1; fi
+  if [ $(( n + self )) -ge 2 ]; then
+    rec "session-guard" WARN "$(( n + self )) live sessions on $ROOT (pids ${pids:-none}${self:+, plus this one}) — isolate before branch ops"
   else
-    rec "session-guard" PASS "$(printf '%s' "$out" | head -1 | cut -c1-90)"
+    rec "session-guard" PASS "$(( n + self )) live session(s) on the main tree; registry read-only via guard.sh list"
   fi
 }
 
