@@ -35,6 +35,13 @@ for a in "$@"; do
   esac
 done
 
+# jarvis-voice's Agent SDK claude fires the SessionStart hooks too; running
+# the hook-mode check there just adds ~5s to every voice session start and
+# its output goes nowhere a human reads. Skip it (a manual run still works).
+if [ "$QUIET" = 1 ] && tr '\0' ' ' < "/proc/${CLAUDE_PID:-0}/cmdline" 2>/dev/null | grep -q 'claude_agent_sdk/'; then
+  exit 0
+fi
+
 # The live stack and its gitignored runtime state (logs, cues, tokens, the
 # HQ vault) always sit in the main checkout, even when this script runs
 # from a worktree — so resolve the main tree via git's common dir.
@@ -238,21 +245,21 @@ check_guard() {
   if ! grep -q "guard.sh register" "$ROOT/.claude/settings.json" 2>/dev/null; then
     rec "session-guard" FAIL "guard.sh runs, but register hook missing from .claude/settings.json"; return
   fi
-  # Registered sessions on the main tree, minus list's own "(this)" row and
-  # jarvis-voice's bundled Agent SDK `claude` (it fires the SessionStart hooks
-  # too, but it's a subprocess of the voice server, not a session).
+  # Registered sessions on the main tree, minus list's own "(this)" row.
+  # (guard.sh itself drops jarvis-voice's Agent SDK `claude` from the registry.)
   local pids="" pid tree
   while read -r pid tree; do
     [ "$tree" = "$ROOT" ] || continue
-    tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q claude_agent_sdk && continue
     pids="${pids:+$pids,}$pid"
   done < <(printf '%s\n' "$out" | awk '$1=="pid" && $2 !~ /\(this\)/ {print $2, $4}')
   local n=0; [ -n "$pids" ] && n=$(printf '%s\n' "$pids" | tr ',' '\n' | wc -l)
-  # A Claude session running this from the main tree is one of the sessions too.
+  # A Claude session running this from the main tree is one of the sessions
+  # too — unless it's jarvis-voice's Agent SDK claude (e.g. a voice-asked check).
   local self=0
   local self_cwd; self_cwd=$(readlink "/proc/${CLAUDE_PID:-0}/cwd" 2>/dev/null)
   if [ -n "$self_cwd" ] && [ "$(git -C "$self_cwd" rev-parse --show-toplevel 2>/dev/null)" = "$ROOT" ] \
-     && ! printf ',%s,' "$pids" | grep -q ",$CLAUDE_PID,"; then self=1; fi
+     && ! printf ',%s,' "$pids" | grep -q ",$CLAUDE_PID," \
+     && ! tr '\0' ' ' < "/proc/$CLAUDE_PID/cmdline" 2>/dev/null | grep -q 'claude_agent_sdk/'; then self=1; fi
   if [ $(( n + self )) -ge 2 ]; then
     rec "session-guard" WARN "$(( n + self )) live sessions on $ROOT (pids ${pids:-none}$([ "$self" = 1 ] && printf ', plus this one')) — isolate before branch ops"
   else
