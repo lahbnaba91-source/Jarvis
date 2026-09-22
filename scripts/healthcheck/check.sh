@@ -18,7 +18,9 @@
 #
 # Exit: 0 = no FAIL, 1 = at least one FAIL. WARN/SKIP never fail the run.
 # Read-only against the systems it checks: it never restarts, pushes or
-# edits anything except its own report file.
+# edits anything except its own report and vault-audit's report (the same
+# file the audit's SessionStart hook rewrites); --no-write suppresses both.
+# --deep also rebuilds next-app's production .next output, as check 11 does.
 set -uo pipefail
 
 DEEP=0 QUICK=0 QUIET=0 WRITE=1
@@ -202,7 +204,7 @@ check_quota() {
   local low; low=$(printf '%s\n' "$l" | grep -oE '~-?[0-9]+d left' | tr -dc -- '-0-9\n' | sort -n | head -1)
   if [ -z "$accts" ]; then
     rec "claude-quota" WARN "5h at $five, but no saved account snapshots with a known expiry"
-  elif [ "${low:-0}" -le 0 ]; then
+  elif [ "${low:-0}" -lt 0 ]; then
     rec "claude-quota" FAIL "5h at $five; a saved account's refresh token has expired ($accts) — redo watch-login.sh"
   elif [ "${low:-0}" -le 5 ]; then
     rec "claude-quota" WARN "5h at $five; refresh token expiring soon ($accts) — redo watch-login.sh"
@@ -214,7 +216,8 @@ check_quota() {
 # ── 8. vault-audit ───────────────────────────────────────────────────────
 check_audit() {
   local out rc
-  out=$(python3 "$ROOT/scripts/vault-audit/audit.py" --vault "$VAULT" --json 2>&1); rc=$?
+  local nw=(); [ "$WRITE" = 0 ] && nw=(--no-write)
+  out=$(python3 "$ROOT/scripts/vault-audit/audit.py" --vault "$VAULT" "${nw[@]}" --json 2>&1); rc=$?
   case "$rc" in
     0) rec "vault-audit" PASS "0 findings" ;;
     1) local n; n=$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["total"])' 2>/dev/null)
@@ -247,10 +250,11 @@ check_guard() {
   local n=0; [ -n "$pids" ] && n=$(printf '%s\n' "$pids" | tr ',' '\n' | wc -l)
   # A Claude session running this from the main tree is one of the sessions too.
   local self=0
-  if [ -n "${CLAUDE_PID:-}" ] && [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "$ROOT" ] \
+  local self_cwd; self_cwd=$(readlink "/proc/${CLAUDE_PID:-0}/cwd" 2>/dev/null)
+  if [ -n "$self_cwd" ] && [ "$(git -C "$self_cwd" rev-parse --show-toplevel 2>/dev/null)" = "$ROOT" ] \
      && ! printf ',%s,' "$pids" | grep -q ",$CLAUDE_PID,"; then self=1; fi
   if [ $(( n + self )) -ge 2 ]; then
-    rec "session-guard" WARN "$(( n + self )) live sessions on $ROOT (pids ${pids:-none}${self:+, plus this one}) — isolate before branch ops"
+    rec "session-guard" WARN "$(( n + self )) live sessions on $ROOT (pids ${pids:-none}$([ "$self" = 1 ] && printf ', plus this one')) — isolate before branch ops"
   else
     rec "session-guard" PASS "$(( n + self )) live session(s) on the main tree; registry read-only via guard.sh list"
   fi
@@ -278,6 +282,10 @@ check_nextapp() {
   if [ "$DEEP" = 0 ]; then
     rec "next-app" PASS "Cesium token present (build gates: --deep)"; return
   fi
+  # Builds in place, exactly as the runbook's check 11 does. Safe alongside a
+  # running `next dev`: Next 16 keeps dev output in .next/dev, apart from the
+  # production build this replaces. (A temp copy doesn't work — Turbopack
+  # rejects a node_modules symlink that points outside the project root.)
   local step
   for step in "npm run typecheck" "npm run lint" "npx next build"; do
     if ! (cd "$ROOT/next-app" && $step >/dev/null 2>&1); then
