@@ -102,6 +102,31 @@ def git_env_with_helper(helper_path: str) -> list:
     return ["-c", "credential.helper=", "-c", f"credential.helper={helper_path}"]
 
 
+def report_push(pushed_sha: str, verifier=None) -> str:
+    """`git push` exiting 0 means GitHub accepted the push; it is reported as
+    completed. It's VERIFIED only when a separate read-only API lookup of
+    the branch head returns the commit we pushed. Neither says anything
+    about other devices: each phone/laptop syncs on its own schedule."""
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        from jarvis_core.github_verify import GitHubVerifier
+    except ImportError:
+        return (f"Push completed (git exit 0, commit {pushed_sha[:7]}); not independently "
+                "verified (jarvis_core not found). Other devices: unknown until they sync.")
+    v = verifier or GitHubVerifier(allowed_repos=[f"{REPO_OWNER}/{REPO_NAME}"])
+    obs = v.branch_head(f"{REPO_OWNER}/{REPO_NAME}", BRANCH)
+    head = (obs.data or {}).get("sha") or ""
+    if obs.outcome.value == "found" and head == pushed_sha:
+        status = f"Push VERIFIED: GitHub {BRANCH} is at {pushed_sha[:7]} (checked via API just now)."
+    elif obs.outcome.value == "found":
+        status = (f"Push completed (git exit 0) but NOT verified: GitHub {BRANCH} is at "
+                  f"{head[:7]}, expected {pushed_sha[:7]} (someone else may have pushed since).")
+    else:
+        status = (f"Push completed (git exit 0, commit {pushed_sha[:7]}); verification "
+                  f"unavailable ({obs.outcome.value}: {obs.detail}), so it's unverified.")
+    return status + " Other devices (phone): unknown until they sync."
+
+
 def main():
     apply = "--apply" in sys.argv
 
@@ -259,7 +284,8 @@ def main():
         )
         print(push_result.stdout)
         print(push_result.stderr)
-        print("Push complete.")
+        pushed = run(["git", "rev-parse", "HEAD"], cwd=clone_dir).stdout.strip()
+        print(report_push(pushed))
 
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

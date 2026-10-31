@@ -1,0 +1,3 @@
+# OAuth clients, hashed tokens and the generated password: live credentials.
+.state/
+server.log

@@ -75,6 +75,8 @@ __pycache__/
 # pull-hq-vault.py's own hidden baseline clone -- a change-detection sensor,
 # never the vault content itself (that stays HQ/, a plain copy on purpose).
 .hq-vault-pull-sensor/
+# when the local HQ/ copy was taken (jarvis-mcp/load-vault.sh); kept outside HQ/
+.hq-snapshot.json
 
 # Gesture classifier (scripts/gesture-classifier/): the pipeline scripts are
 # ours and tracked, but the venv, the extracted feature cache, and the
