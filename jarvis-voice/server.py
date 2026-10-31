@@ -53,6 +53,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 AGENT_DIR = os.path.dirname(HERE)  # the Jarvis repo root
 BUS_STATE = os.path.join(AGENT_DIR, ".voice-bus", ".voice_state")
 DENY_SETTINGS = os.path.join(HERE, "voice-deny.json")
+
+# Evidence-backed status checks: read-only GitHub/vault tools for the agent,
+# and a guard that flags status claims the turn's evidence doesn't support.
+import sys  # noqa: E402
+
+if AGENT_DIR not in sys.path:
+    sys.path.insert(0, AGENT_DIR)
+from jarvis_core.agent_tools import EVIDENCE_RULES, build_verify_server  # noqa: E402
+from jarvis_core.claims import ClaimGuard, Ledger  # noqa: E402
+
+LEDGER = Ledger()
 TMP_WEBM = os.path.join(HERE, "tmp", "rec.webm")
 
 MODEL = "claude-haiku-4-5-20251001"
@@ -73,7 +84,8 @@ VOICE_DISCIPLINE = (
     "read as text. Write for the ear: contractions, short conversational "
     "sentences, no markdown, no lists, no code blocks, no emoji, no URLs. "
     "Say numbers the way a person says them out loud. Keep it brief; "
-    "expand only if the question genuinely needs it."
+    "expand only if the question genuinely needs it. "
+    + EVIDENCE_RULES
 )
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s")
@@ -254,6 +266,7 @@ async def get_sdk_client() -> ClaudeSDKClient:
             permission_mode="bypassPermissions",
             settings=DENY_SETTINGS,
             include_partial_messages=True,
+            mcp_servers={"verify": build_verify_server(os.path.join(AGENT_DIR, "HQ"), LEDGER)},
         )
         _sdk_client = ClaudeSDKClient(options=opts)
         await _sdk_client.connect()
@@ -278,6 +291,7 @@ async def reset_sdk_client() -> None:
 
 async def ask_claude(text: str) -> tuple[str, dict]:
     client = await get_sdk_client()
+    LEDGER.reset()
     await client.query(text)
     parts = []
     usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
@@ -295,7 +309,10 @@ async def ask_claude(text: str) -> tuple[str, dict]:
             usage["output_tokens"] = int(u.get("output_tokens") or 0)
             usage["cost_usd"] = float(getattr(msg, "total_cost_usd", 0) or 0)
             break
-    return "".join(parts).strip(), usage
+    guarded = ClaimGuard(LEDGER).check("".join(parts).strip())
+    if guarded.flags:
+        usage["unverified_claims"] = guarded.flags
+    return guarded.text, usage
 
 
 async def handle_chunk(request: web.Request) -> web.Response:

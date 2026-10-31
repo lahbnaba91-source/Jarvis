@@ -32,13 +32,25 @@ echo "-> downloading $OWNER/$REPO"
 git -c credential.helper= clone -q --depth 1 \
   "https://x-access-token:${HQVAULT_TOKEN}@github.com/${OWNER}/${REPO}.git" "$tmp/hq" \
   || { echo "couldn't clone $OWNER/$REPO: check the token has access to that repo" >&2; exit 1; }
+snap_commit="$(git -C "$tmp/hq" rev-parse HEAD)"
 rm -rf "$tmp/hq/.git"
 rm -rf HQ.new && cp -a "$tmp/hq" HQ.new && rm -rf HQ && mv HQ.new HQ
-echo "   HQ/ ready: $(find HQ -name '*.md' | wc -l) notes"
+# When this copy was taken, kept OUTSIDE HQ/ so it can never be pushed into
+# the vault. Jarvis uses it to label local findings with their age.
+printf '{"commit": "%s", "taken_at": %s, "taken_at_iso": "%s", "repo": "%s/%s"}\n' \
+  "$snap_commit" "$(date +%s)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$OWNER" "$REPO" > .hq-snapshot.json
+echo "   HQ/ ready: $(find HQ -name '*.md' | wc -l) notes (commit ${snap_commit:0:7})"
+
+# evidence-backed status checks used by server.py
+if [ ! -f jarvis_core/evidence.py ]; then
+  echo "-> copying jarvis_core (status verification) from Jarvis"
+  git clone -q --depth 1 "$JARVIS_SRC" "$tmp/jvc"
+  cp -r "$tmp/jvc/jarvis_core" .
+fi
 
 # keep personal files out of this repo's git history
 touch .gitignore
-for p in HQ/ CLAUDE.md CLAUDE.vars jarvis-voice/.venv/; do
+for p in HQ/ CLAUDE.md CLAUDE.vars jarvis-voice/.venv/ .hq-snapshot.json; do
   grep -qxF "$p" .gitignore || echo "$p" >> .gitignore
 done
 
