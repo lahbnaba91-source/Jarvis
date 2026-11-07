@@ -10,8 +10,9 @@
 <meta name="apple-mobile-web-app-title" content="Sky Radar">
 <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
 <style>
-/* Layout: full-bleed map, Apple Maps chrome — floating glass controls top-right, draggable bottom sheet. */
+/* Layout: full-bleed vector map, Apple Maps chrome — floating glass controls top-right, draggable bottom sheet. */
 :root{
   --blue:#007AFF; --red:#FF3B30; --orange:#FF9500; --green:#34C759;
   --label:#000; --label2:rgba(60,60,67,.62); --label3:rgba(60,60,67,.32);
@@ -49,29 +50,22 @@ a{color:inherit;text-decoration:none}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 
 /* ---------- map ---------- */
-#map{position:fixed;inset:0;overflow:hidden;touch-action:none;background:var(--map-bg);cursor:grab}
-#tiles,#overlay,#markers{position:absolute;inset:0;pointer-events:none}
-#tiles{z-index:0;isolation:isolate}#overlay{z-index:1}#markers{z-index:2}
-.tile{position:absolute;left:0;top:0;opacity:0;transition:opacity .25s;will-change:transform}
-.tile.ok{opacity:1}
-:root[data-map="dark"] #tiles{filter:brightness(1.18) contrast(.96) saturate(1.2)}
-.ring{position:absolute;border-radius:50%;border:1.5px dashed color-mix(in srgb,var(--blue) 55%,transparent);background:color-mix(in srgb,var(--blue) 4%,transparent);transform:translate(-50%,-50%)}
-.acc{position:absolute;border-radius:50%;background:color-mix(in srgb,var(--blue) 14%,transparent);border:1px solid color-mix(in srgb,var(--blue) 30%,transparent);transform:translate(-50%,-50%)}
-#me{position:absolute;width:0;height:0}
-#me .cone{position:absolute;left:-46px;top:-46px;width:92px;height:92px;border-radius:50%;background:conic-gradient(from -28deg,color-mix(in srgb,var(--blue) 45%,transparent),transparent 56deg);-webkit-mask:radial-gradient(circle,#000 18%,transparent 70%);mask:radial-gradient(circle,#000 18%,transparent 70%);opacity:0;transition:opacity .4s}
-#me.moving .cone{opacity:1}
-#me .halo{position:absolute;left:-22px;top:-22px;width:44px;height:44px;border-radius:50%;background:var(--blue);opacity:.22;animation:pulse 2.4s ease-out infinite}
-#me .dot{position:absolute;left:-9.5px;top:-9.5px;width:19px;height:19px;border-radius:50%;background:var(--blue);border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35)}
+#map{position:fixed;inset:0;background:var(--map-bg)}
+#map .maplibregl-canvas{outline:none}
+.me{width:0;height:0;pointer-events:none}
+.me .cone{position:absolute;left:-46px;top:-46px;width:92px;height:92px;border-radius:50%;background:conic-gradient(from -28deg,color-mix(in srgb,var(--blue) 45%,transparent),transparent 56deg);-webkit-mask:radial-gradient(circle,#000 18%,transparent 70%);mask:radial-gradient(circle,#000 18%,transparent 70%);opacity:0;transition:opacity .4s}
+.me.moving .cone{opacity:1}
+.me .halo{position:absolute;left:-22px;top:-22px;width:44px;height:44px;border-radius:50%;background:var(--blue);opacity:.22;animation:pulse 2.4s ease-out infinite}
+.me .dot{position:absolute;left:-9.5px;top:-9.5px;width:19px;height:19px;border-radius:50%;background:var(--blue);border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35)}
 @keyframes pulse{0%{transform:scale(.5);opacity:.35}80%,100%{transform:scale(1.5);opacity:0}}
 
-.ac{position:absolute;left:0;top:0;pointer-events:auto;cursor:pointer;will-change:transform}
-.ac .g{position:absolute;left:-15px;top:-15px;width:30px;height:30px;display:grid;place-items:center}
+.ac{width:30px;height:30px;cursor:pointer}
+.ac .g{position:absolute;inset:0;display:grid;place-items:center}
 .ac svg{width:26px;height:26px;fill:var(--plane);stroke:var(--plane-edge);stroke-width:1.3;stroke-linejoin:round;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35));transition:fill .2s}
 .ac.gnd svg{width:18px;height:18px;fill:var(--ground)}
 .ac.em svg{fill:var(--red)}
 .ac.sel svg{fill:var(--blue);width:34px;height:34px}
-.ac.sel{z-index:5}
-.ac .lb{position:absolute;left:16px;top:-11px;white-space:nowrap;padding:3px 7px 3px 6px;border-radius:7px;background:var(--material);-webkit-backdrop-filter:blur(14px) saturate(180%);backdrop-filter:blur(14px) saturate(180%);box-shadow:0 1px 4px rgba(0,0,0,.16);font-size:11px;line-height:1.15;display:flex;gap:5px;align-items:baseline}
+.ac .lb{position:absolute;left:31px;top:4px;white-space:nowrap;padding:3px 7px 3px 6px;border-radius:7px;background:var(--material);-webkit-backdrop-filter:blur(14px) saturate(180%);backdrop-filter:blur(14px) saturate(180%);box-shadow:0 1px 4px rgba(0,0,0,.16);font-size:11px;line-height:1.15;display:flex;gap:5px;align-items:baseline;color:var(--label)}
 .ac .lb b{font-weight:650;letter-spacing:.01em}
 .ac .lb i{font-style:normal;color:var(--label2);font-variant-numeric:tabular-nums}
 .ac.sel .lb{background:var(--blue);color:#fff}
@@ -100,7 +94,7 @@ a{color:inherit;text-decoration:none}
 #sheet{position:fixed;left:0;right:0;bottom:0;height:calc(92% - env(safe-area-inset-top,0px));z-index:25;border-radius:14px 14px 0 0;display:flex;flex-direction:column;will-change:transform;transition:transform .32s cubic-bezier(.2,.9,.25,1)}
 #sheet.drag{transition:none}
 @media (min-width:700px){#sheet{left:calc(env(safe-area-inset-left,0px) + 12px);right:auto;width:380px;bottom:12px;border-radius:14px}}
-#legal{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);top:-22px;font-size:10px;color:var(--label2);text-shadow:0 0 3px var(--map-bg),0 0 6px var(--map-bg);white-space:nowrap}
+#legal{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);right:12px;top:-22px;font-size:10px;color:var(--label2);text-shadow:0 0 3px var(--map-bg),0 0 6px var(--map-bg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #legal a{text-decoration:underline}
 #head{flex:none;padding:6px 16px 10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));touch-action:none;cursor:grab}
 .grab{width:36px;height:5px;border-radius:3px;background:var(--label3);margin:0 auto 9px}
@@ -115,7 +109,7 @@ a{color:inherit;text-decoration:none}
 .sec{font:700 20px/1.2 var(--font-d);margin:6px 0 8px;letter-spacing:-.01em}
 .group{background:var(--grouped);border-radius:12px;overflow:hidden}
 .row{display:flex;align-items:center;gap:12px;padding:9px 12px;width:100%;text-align:left;min-height:62px}
-.row+.row{border-top:.5px solid var(--sep);margin-left:0}
+.row+.row{border-top:.5px solid var(--sep)}
 .ico{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;flex:none;background:color-mix(in srgb,var(--blue) 16%,transparent)}
 .ico svg{width:22px;height:22px;fill:var(--blue)}
 .ico.gnd{background:var(--fill)}.ico.gnd svg{fill:var(--ground)}
@@ -152,23 +146,19 @@ a{color:inherit;text-decoration:none}
 .kv b{font-weight:500;text-align:right;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .badge{display:inline-block;margin-bottom:12px;padding:6px 10px;border-radius:8px;background:var(--red);color:#fff;font-weight:700;font-size:13px;letter-spacing:.03em}
 .foot{font-size:12px;color:var(--label2);margin:12px 2px 4px;line-height:1.45}
-@media (prefers-reduced-motion:reduce){#sheet{transition:none}#me .halo{animation:none}.tile{transition:none}}
+@media (prefers-reduced-motion:reduce){#sheet{transition:none}.me .halo{animation:none}}
 </style>
 </head>
 <body>
 <div id="sab" style="position:fixed;height:env(safe-area-inset-bottom,0px);width:0;visibility:hidden"></div>
-<div id="map">
-  <div id="tiles"></div>
-  <div id="overlay"><div class="ring" id="ring" hidden></div><div class="acc" id="acc" hidden></div></div>
-  <div id="markers"><div id="me" hidden><div class="cone"></div><div class="halo"></div><div class="dot"></div></div></div>
-</div>
+<div id="map"></div>
 
 <div id="speed" class="glass" hidden><b id="spdv">0</b><span id="spdu">mph</span></div>
 <button id="area" class="glass" hidden>Search This Area</button>
 
 <div id="ctrl" class="glass">
   <button id="btnMenu" aria-label="Map settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/></svg></button>
-  <button id="btnLoc" aria-label="Show my location"><svg id="locIco" viewBox="0 0 24 24"><path d="M20.5 3.5 3.8 10.4c-.8.3-.7 1.4.1 1.6l6.6 1.5 1.5 6.6c.2.8 1.3.9 1.6.1L20.5 3.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+  <button id="btnLoc" aria-label="Show my location"><svg id="locIco" viewBox="0 0 24 24"></svg></button>
 </div>
 
 <div id="menu" class="glass" hidden>
@@ -178,7 +168,7 @@ a{color:inherit;text-decoration:none}
 </div>
 
 <div id="sheet" class="glass">
-  <div id="legal">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> · ADS-B <span id="feedName">adsb.lol</span></div>
+  <div id="legal"><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · ADS-B <span id="feedName">—</span></div>
   <div id="head">
     <div class="grab"></div>
     <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><input id="q" type="search" placeholder="Search flights, tails, types" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search"></label>
@@ -187,10 +177,10 @@ a{color:inherit;text-decoration:none}
   <div id="body"></div>
 </div>
 
+<script src="vendor/maplibre-gl.js"></script>
 <script>
 (() => {
 'use strict';
-const TILE = 256, MINZ = 3, MAXZ = 18;
 const PLANE = 'M12 1.6c.85 0 1.45.75 1.45 1.7v5.55l7.8 4.7v2.15l-7.8-2.35v5.05l2.4 1.75v1.45L12 20.6l-3.85.95v-1.45l2.4-1.75v-5.05l-7.8 2.35V13.5l7.8-4.7V3.3c0-.95.6-1.7 1.45-1.7Z';
 const planeSvg = r => `<svg viewBox="0 0 24 24" style="transform:rotate(${Math.round(r||0)}deg)"><path d="${PLANE}"/></svg>`;
 const $ = id => document.getElementById(id);
@@ -207,26 +197,25 @@ const store = {get(k,d){try{const v=localStorage.getItem('skyradar.'+k);return v
 const S = {theme:store.get('theme','auto'), units:store.get('units','mi'), range:+store.get('range','40')};
 
 /* ---------- state ---------- */
-const map = {lat:32.6245, lon:-115.4523, z:10};   // Mexicali until GPS answers
+const START = {lat:32.6245, lon:-115.4523};   // Mexicali until GPS answers
 let follow = 'none';            // 'me' | 'ac' | 'none'
 let me = null;                  // {lat,lon,acc,spd,hdg,t}
 let geoState = 'idle';          // idle | asking | on | denied | unavailable
-let query = {lat:map.lat, lon:map.lon};
+let query = {...START};
 let aircraft = new Map();       // hex -> record
 let selected = null, selCache = null;
 let feed = {name:'', ok:false, at:0, err:0};
-let dirty = true, listDirty = true;
-const mapEl = $('map'), tilesEl = $('tiles'), markersEl = $('markers');
+let listDirty = true;
+const mapEl = $('map');
 
 /* ---------- geo math ---------- */
 const R2D = 180/Math.PI, D2R = Math.PI/180;
-function project(lat, lon, z){const s=TILE*2**z, sin=Math.sin(Math.max(-85,Math.min(85,lat))*D2R);return {x:(lon+180)/360*s, y:(.5-Math.log((1+sin)/(1-sin))/(4*Math.PI))*s};}
-function unproject(x, y, z){const s=TILE*2**z, n=Math.PI-2*Math.PI*y/s;return {lat:R2D*Math.atan(Math.sinh(n)), lon:((x/s*360-180+540)%360)-180};}
 function dist(a, b){const dLa=(b.lat-a.lat)*D2R, dLo=(b.lon-a.lon)*D2R, h=Math.sin(dLa/2)**2+Math.cos(a.lat*D2R)*Math.cos(b.lat*D2R)*Math.sin(dLo/2)**2;return 12742000*Math.asin(Math.sqrt(h));}
 function bearing(a, b){const y=Math.sin((b.lon-a.lon)*D2R)*Math.cos(b.lat*D2R), x=Math.cos(a.lat*D2R)*Math.sin(b.lat*D2R)-Math.sin(a.lat*D2R)*Math.cos(b.lat*D2R)*Math.cos((b.lon-a.lon)*D2R);return (Math.atan2(y,x)*R2D+360)%360;}
 function dest(p, brg, m){const d=m/6371000, b=brg*D2R, la=p.lat*D2R, lo=p.lon*D2R, la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(b));return {lat:la2*R2D, lon:(lo+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2)))*R2D};}
 const compass = d => ['N','NE','E','SE','S','SW','W','NW'][Math.round(((d%360)+360)%360/45)%8];
-const mpp = () => 156543.03392*Math.cos(map.lat*D2R)/2**map.z;
+function circle(c, m, n=72){const pts=[];for(let i=0;i<=n;i++){const p=dest(c,i*360/n,m);pts.push([p.lon,p.lat]);}return {type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[pts]}};}
+const EMPTY = {type:'FeatureCollection',features:[]};
 
 /* ---------- formatting ---------- */
 const nf = new Intl.NumberFormat('en-US');
@@ -267,13 +256,16 @@ function livePos(a, now){
   return dest(a, a.trk, a.gs*0.514444*dt);
 }
 
-/* ---------- feeds (tried in order, first success wins) ---------- */
+/* ---------- feeds ----------
+   1) the Sky Radar relay on the same server (no browser restrictions),
+   2) the public feeds directly (only work where the feed allows browser calls). */
 const FEEDS = [
+  {name:'relay',          url:(la,lo,r)=>`api/aircraft?lat=${la}&lon=${lo}&r=${r}`, relay:true},
   {name:'adsb.lol',       url:(la,lo,r)=>`https://api.adsb.lol/v2/point/${la}/${lo}/${r}`},
   {name:'airplanes.live', url:(la,lo,r)=>`https://api.airplanes.live/v2/point/${la}/${lo}/${r}`},
   {name:'adsb.fi',        url:(la,lo,r)=>`https://opendata.adsb.fi/api/v2/lat/${la}/lon/${lo}/dist/${r}`},
 ];
-let feedIdx = 0, pollTimer = 0, polling = false;
+let feedIdx = 0, pollTimer = 0, polling = false, relayDead = false;
 async function poll(){
   clearTimeout(pollTimer);
   if(polling) return;
@@ -283,20 +275,22 @@ async function poll(){
   let done = false;
   for(let i=0;i<FEEDS.length && !done;i++){
     const f = FEEDS[(feedIdx+i)%FEEDS.length];
-    const ctl = new AbortController(), t = setTimeout(()=>ctl.abort(), 7000);
+    if(f.relay && relayDead) continue;
+    const ctl = new AbortController(), t = setTimeout(()=>ctl.abort(), 8000);
     try{
       const res = await fetch(f.url(la,lo,S.range), {signal:ctl.signal, cache:'no-store'});
+      if(f.relay && (res.status===404 || res.status===405)){ relayDead = true; throw new Error('no relay here'); }
       if(!res.ok) throw new Error('HTTP '+res.status);
       const j = await res.json();
       const list = Array.isArray(j.ac) ? j.ac : Array.isArray(j.aircraft) ? j.aircraft : null;
       if(!list) throw new Error('bad payload');
-      ingest(list, f.name);
+      ingest(list, f.relay ? (j.source || 'relay') : f.name);
       feedIdx = (feedIdx+i)%FEEDS.length;
       done = true;
     }catch(e){ console.warn('[sky-radar]', f.name, e && e.message); }
     finally{ clearTimeout(t); }
   }
-  if(!done){ feed.ok=false; feed.err++; listDirty=true; }
+  if(!done){ feed.ok=false; feed.err++; listDirty=true; renderSheet(); }
   polling = false;
   pollTimer = setTimeout(poll, done ? 8000 : Math.min(30000, 5000*feed.err));
 }
@@ -307,226 +301,175 @@ function ingest(list, name){
   feed = {name, ok:true, at:Date.now(), err:0};
   $('feedName').textContent = name;
   if(selected && aircraft.has(selected)) selCache = aircraft.get(selected);
-  dirty = listDirty = true;
+  listDirty = true; updateMarkers(); renderSheet();
 }
 
-/* ---------- tiles ---------- */
-const tiles = new Map();
-let mapStyle = '';
+/* ---------- map ---------- */
+const STYLES = {
+  light:['https://tiles.openfreemap.org/styles/liberty','https://tiles.openfreemap.org/styles/bright','https://tiles.openfreemap.org/styles/positron'],
+  dark: ['https://tiles.openfreemap.org/styles/dark','https://tiles.openfreemap.org/styles/fiord','https://tiles.openfreemap.org/styles/positron'],
+};
+const BLANK = {version:8, sources:{}, layers:[{id:'bg', type:'background', paint:{'background-color':'#e9e6df'}}]};
+const gl = new maplibregl.Map({
+  container:mapEl, style:BLANK, center:[START.lon, START.lat], zoom:10, minZoom:2, maxZoom:18,
+  attributionControl:false, dragRotate:false, pitchWithRotate:false, touchPitch:false, fadeDuration:200,
+});
+gl.touchZoomRotate.disableRotation(); gl.keyboard.disableRotation();
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let mapKind = '', styleToken = 0;
 function effectiveDark(){return S.theme==='dark' || (S.theme==='auto' && matchMedia('(prefers-color-scheme: dark)').matches);}
-function tileUrl(z,x,y){
-  const s='abcd'[(x+y)&3];
-  return mapStyle==='dark' ? `https://${s}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}@2x.png`
-                           : `https://${s}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`;
+async function loadStyle(kind){
+  const token = ++styleToken;
+  for(const url of STYLES[kind]){
+    try{
+      const ctl = new AbortController(), t = setTimeout(()=>ctl.abort(), 8000);
+      const r = await fetch(url, {signal:ctl.signal}); clearTimeout(t);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const style = await r.json();
+      if(token !== styleToken) return;
+      gl.setStyle(style, {diff:false}); return;
+    }catch(e){ console.warn('[sky-radar] style', url, e && e.message); }
+  }
 }
 function applyTheme(){
   const root=document.documentElement;
   if(S.theme==='auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', S.theme);
-  const st = effectiveDark() ? 'dark' : 'light';
-  root.setAttribute('data-map', st);
-  if(st!==mapStyle){ mapStyle=st; for(const el of tiles.values()) el.remove(); tiles.clear(); dirty=true; }
+  const kind = effectiveDark() ? 'dark' : 'light';
+  if(kind!==mapKind){ mapKind = kind; loadStyle(kind); }
+  else ensureLayers();
 }
-function renderTiles(W, H){
-  const want = new Set(), base = Math.floor(map.z), c = project(map.lat,map.lon,map.z);
-  for(const tz of [base-1, base]){
-    if(tz < 2) continue;
-    const scale = 2**(map.z-tz), size = TILE*scale, n = 2**tz;
-    const cx = c.x/scale, cy = c.y/scale;
-    const x0 = Math.floor((cx - W/2/scale)/TILE), x1 = Math.floor((cx + W/2/scale)/TILE);
-    const y0 = Math.max(0, Math.floor((cy - H/2/scale)/TILE)), y1 = Math.min(n-1, Math.floor((cy + H/2/scale)/TILE));
-    for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){
-      const key = tz+'/'+x+'/'+y;
-      want.add(key);
-      let el = tiles.get(key);
-      if(!el){
-        el = new Image(); el.className='tile'; el.decoding='async'; el.draggable=false; el.alt='';
-        el.onload = () => el.classList.add('ok');
-        el.src = tileUrl(tz, ((x%n)+n)%n, y);
-        el.style.zIndex = tz===base ? 2 : 1;
-        tilesEl.appendChild(el); tiles.set(key, el);
-      }
-      el.style.zIndex = tz===base ? 2 : 1;
-      const left = Math.round(W/2 + (x*TILE - cx)*scale), top = Math.round(H/2 + (y*TILE - cy)*scale);
-      el.style.width = el.style.height = (Math.ceil(size)+1)+'px';
-      el.style.transform = `translate3d(${left}px,${top}px,0)`;
-    }
+function ensureLayers(){
+  try{ addShapeLayers(); }catch(e){ console.warn('[sky-radar] layers', e && e.message); }
+}
+function addShapeLayers(){
+  const blue = css('--blue') || '#007AFF';
+  if(!gl.getSource('ring')){
+    gl.addSource('ring',{type:'geojson',data:EMPTY});
+    gl.addLayer({id:'ring-fill',type:'fill',source:'ring',paint:{'fill-color':blue,'fill-opacity':0.04}});
+    gl.addLayer({id:'ring-line',type:'line',source:'ring',paint:{'line-color':blue,'line-opacity':0.55,'line-width':1.5,'line-dasharray':[3,3]}});
   }
-  for(const [k,el] of tiles) if(!want.has(k)){ el.remove(); tiles.delete(k); }
+  if(!gl.getSource('acc')){
+    gl.addSource('acc',{type:'geojson',data:EMPTY});
+    gl.addLayer({id:'acc-fill',type:'fill',source:'acc',paint:{'fill-color':blue,'fill-opacity':0.14}});
+    gl.addLayer({id:'acc-line',type:'line',source:'acc',paint:{'line-color':blue,'line-opacity':0.3,'line-width':1}});
+  }
+  for(const id of ['ring-fill','acc-fill']) gl.setPaintProperty(id,'fill-color',blue);
+  for(const id of ['ring-line','acc-line']) gl.setPaintProperty(id,'line-color',blue);
+  updateShapes();
+}
+gl.on('style.load', ensureLayers);
+function updateShapes(){
+  const ring = gl.getSource('ring'), acc = gl.getSource('acc');
+  if(ring) ring.setData(circle(query, S.range*1852));
+  if(acc) acc.setData(me && me.acc > 25 ? circle(me, me.acc, 48) : EMPTY);
 }
 
 /* ---------- markers ---------- */
-const markEls = new Map();
-function screen(p, W, H, c){const q=project(p.lat,p.lon,map.z);return {x:W/2+q.x-c.x, y:H/2+q.y-c.y};}
-function renderMarkers(W, H){
-  const now = performance.now(), c = project(map.lat,map.lon,map.z);
-  mapEl.classList.toggle('nolabels', map.z < 8.5 && aircraft.size > 25);
-  const seen = new Set();
+const marks = new Map();
+let meMarker = null;
+function updateMarkers(){
+  const now = performance.now();
   for(const a of aircraft.values()){
-    const p = livePos(a, now), s = screen(p, W, H, c);
-    if(s.x < -80 || s.y < -60 || s.x > W+80 || s.y > H+60){ continue; }
-    seen.add(a.hex);
-    let el = markEls.get(a.hex);
-    if(!el){ el = document.createElement('div'); el.dataset.hex = a.hex; el.innerHTML = '<div class="g"></div><div class="lb"><b></b><i></i></div>'; markersEl.appendChild(el); markEls.set(a.hex, el); el._k=''; }
+    const p = livePos(a, now);
+    let m = marks.get(a.hex);
+    if(!m){
+      const wrap = document.createElement('div'), el = document.createElement('div');
+      el.innerHTML = '<div class="g"></div><div class="lb"><b></b><i></i></div>';
+      wrap.appendChild(el);
+      wrap.addEventListener('click', e => { e.stopPropagation(); select(a.hex, true); });
+      m = {wrap, el, k:'', mk:new maplibregl.Marker({element:wrap, anchor:'center'}).setLngLat([p.lon,p.lat]).addTo(gl)};
+      marks.set(a.hex, m);
+    }
     const k = [a.trk|0, a.ground, a.em, selected===a.hex, title(a), shortAlt(a), trend(a.vr)].join('|');
-    if(el._k !== k){
-      el._k = k;
-      el.className = 'ac' + (a.ground?' gnd':'') + (a.em?' em':'') + (selected===a.hex?' sel':'');
-      el.firstChild.innerHTML = planeSvg(a.trk);
-      el.querySelector('b').textContent = title(a);
-      el.querySelector('i').textContent = (shortAlt(a) + ' ' + trend(a.vr)).trim();
+    if(m.k !== k){
+      m.k = k;
+      m.el.className = 'ac' + (a.ground?' gnd':'') + (a.em?' em':'') + (selected===a.hex?' sel':'');
+      m.wrap.style.zIndex = selected===a.hex ? 5 : a.em ? 4 : '';
+      m.el.firstChild.innerHTML = planeSvg(a.trk);
+      m.el.querySelector('b').textContent = title(a);
+      m.el.querySelector('i').textContent = (shortAlt(a) + ' ' + trend(a.vr)).trim();
     }
-    el.style.transform = `translate3d(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px,0)`;
+    m.mk.setLngLat([p.lon, p.lat]);
   }
-  for(const [h,el] of markEls) if(!seen.has(h)){ el.remove(); markEls.delete(h); }
-
-  // me, accuracy, range ring
-  const meEl = $('me'), acc = $('acc'), ring = $('ring');
-  if(me){
-    const s = screen(me, W, H, c);
-    meEl.hidden = false; meEl.style.transform = `translate3d(${s.x}px,${s.y}px,0)`;
-    const moving = me.spd > 1.5 && me.hdg != null;
-    meEl.classList.toggle('moving', moving);
-    if(moving) meEl.querySelector('.cone').style.transform = `rotate(${me.hdg}deg)`;
-    const r = (me.acc||0)/mpp();
-    acc.hidden = !(r > 14); if(!acc.hidden){ acc.style.left=s.x+'px'; acc.style.top=s.y+'px'; acc.style.width=acc.style.height=(2*r)+'px'; }
-  } else { meEl.hidden = true; acc.hidden = true; }
-  const rs = screen(query, W, H, c), rr = S.range*1852/mpp();
-  ring.hidden = rr < 30 || rr > 6000;
-  if(!ring.hidden){ ring.style.left=rs.x+'px'; ring.style.top=rs.y+'px'; ring.style.width=ring.style.height=(2*rr)+'px'; }
+  for(const [h,m] of marks) if(!aircraft.has(h)){ m.mk.remove(); marks.delete(h); }
+  mapEl.classList.toggle('nolabels', gl.getZoom() < 8.5 && aircraft.size > 25);
+  if(follow==='ac' && selected && aircraft.has(selected)){ const p = livePos(aircraft.get(selected), now); gl.jumpTo({center:[p.lon,p.lat]}); }
 }
-
-/* ---------- frame loop ---------- */
-let lastFrame = 0;
-function frame(t){
-  if(follow==='me' && me){ map.lat=me.lat; map.lon=me.lon; }
-  else if(follow==='ac' && selected && aircraft.has(selected)){ const p=livePos(aircraft.get(selected), performance.now()); map.lat=p.lat; map.lon=p.lon; }
-  if(dirty || t-lastFrame > 250){
-    const W = mapEl.clientWidth, H = mapEl.clientHeight;
-    renderTiles(W,H); renderMarkers(W,H);
-    dirty = false; lastFrame = t;
+function updateMe(){
+  if(!me) return;
+  if(!meMarker){
+    const el = document.createElement('div'); el.className = 'me';
+    el.innerHTML = '<div class="cone"></div><div class="halo"></div><div class="dot"></div>';
+    meMarker = new maplibregl.Marker({element:el, anchor:'center'}).setLngLat([me.lon,me.lat]).addTo(gl);
   }
-  requestAnimationFrame(frame);
+  meMarker.setLngLat([me.lon, me.lat]);
+  const el = meMarker.getElement(), moving = me.spd > 1.5 && me.hdg != null;
+  el.classList.toggle('moving', moving);
+  if(moving) el.querySelector('.cone').style.transform = `rotate(${me.hdg}deg)`;
 }
-
-/* ---------- gestures ---------- */
-const ptrs = new Map(); let gest = null, tapInfo = null, lastTap = 0;
-function rel(e){const r=mapEl.getBoundingClientRect();return {x:e.clientX-r.left, y:e.clientY-r.top};}
-function beginGesture(){
-  const pts = [...ptrs.values()];
-  if(pts.length===1){ gest = {t:'pan', p0:pts[0], c0:project(map.lat,map.lon,map.z)}; }
-  else if(pts.length>=2){
-    const m = {x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2}, d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y)||1;
-    gest = {t:'pinch', m0:m, d0:d, z0:map.z, anchor:screenToLatLon(m)};
-  } else gest = null;
-}
-function screenToLatLon(p){const W=mapEl.clientWidth,H=mapEl.clientHeight,c=project(map.lat,map.lon,map.z);return unproject(c.x+p.x-W/2, c.y+p.y-H/2, map.z);}
-function setCenterKeeping(anchor, p){
-  const W=mapEl.clientWidth,H=mapEl.clientHeight,a=project(anchor.lat,anchor.lon,map.z);
-  const c = unproject(a.x-(p.x-W/2), a.y-(p.y-H/2), map.z); map.lat=c.lat; map.lon=c.lon;
-}
-function breakFollow(){ if(follow!=='none'){ follow='none'; updateLocBtn(); } }
-mapEl.addEventListener('pointerdown', e => {
-  ptrs.set(e.pointerId, rel(e)); beginGesture();
-  if(ptrs.size===1) tapInfo = {x:e.clientX, y:e.clientY, t:performance.now(), target:e.target, moved:false};
-  else tapInfo = null;
-  mapEl.style.cursor='grabbing';
-  if(!$('menu').hidden) toggleMenu(false);
-});
-window.addEventListener('pointermove', e => {
-  if(!ptrs.has(e.pointerId)) return;
-  ptrs.set(e.pointerId, rel(e));
-  if(tapInfo && Math.hypot(e.clientX-tapInfo.x, e.clientY-tapInfo.y) > 7) tapInfo.moved = true;
-  if(!gest) return;
-  if(gest.t==='pan'){
-    if(tapInfo && !tapInfo.moved) return;
-    const p = ptrs.values().next().value, W=mapEl.clientWidth, H=mapEl.clientHeight;
-    const c = unproject(gest.c0.x-(p.x-gest.p0.x), gest.c0.y-(p.y-gest.p0.y), map.z);
-    map.lat=c.lat; map.lon=c.lon; breakFollow();
-  } else {
-    const pts=[...ptrs.values()], m={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2}, d=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)||1;
-    map.z = Math.max(MINZ, Math.min(MAXZ, gest.z0 + Math.log2(d/gest.d0)));
-    if(follow==='none') setCenterKeeping(gest.anchor, m);
-  }
-  dirty = true; checkArea();
-});
-function endPtr(e){
-  if(!ptrs.has(e.pointerId)) return;
-  ptrs.delete(e.pointerId);
-  if(tapInfo && !tapInfo.moved && ptrs.size===0 && performance.now()-tapInfo.t < 350){
-    const hit = tapInfo.target.closest && tapInfo.target.closest('[data-hex]');
-    if(hit) select(hit.dataset.hex, true);
-    else {
-      const now = performance.now();
-      if(now-lastTap < 300){ zoomAt(rel(e), 1); lastTap = 0; }
-      else { lastTap = now; }
-    }
-  }
-  tapInfo = null; beginGesture();
-  if(!ptrs.size) mapEl.style.cursor='';
-}
-window.addEventListener('pointerup', endPtr); window.addEventListener('pointercancel', endPtr);
-function zoomAt(p, dz){
-  const anchor = screenToLatLon(p);
-  map.z = Math.max(MINZ, Math.min(MAXZ, map.z+dz));
-  if(follow==='none') setCenterKeeping(anchor, p);
-  dirty = true;
-}
-mapEl.addEventListener('wheel', e => { e.preventDefault(); zoomAt(rel(e), -e.deltaY*(e.ctrlKey?0.012:0.0025)); }, {passive:false});
+gl.on('zoom', () => mapEl.classList.toggle('nolabels', gl.getZoom() < 8.5 && aircraft.size > 25));
+gl.on('dragstart', e => { if(e.originalEvent) breakFollow(); });
+gl.on('moveend', checkArea);
+mapEl.addEventListener('pointerdown', () => { if(!$('menu').hidden) toggleMenu(false); });
 document.addEventListener('gesturestart', e => e.preventDefault());
-window.addEventListener('resize', () => { dirty = true; placeSheet(); });
+window.addEventListener('resize', () => placeSheet());
 
 /* ---------- search-this-area ---------- */
+function center(){const c = gl.getCenter(); return {lat:c.lat, lon:c.lng};}
+function breakFollow(){ if(follow!=='none'){ follow='none'; updateLocBtn(); if(selected) renderDetail(); } }
 function checkArea(){
-  const show = follow!=='me' && dist(map, query) > Math.max(S.range*1852*0.35, 4000);
+  const show = follow!=='me' && dist(center(), query) > Math.max(S.range*1852*0.35, 4000);
   $('area').hidden = !show;
 }
-$('area').addEventListener('click', () => { query = {lat:map.lat, lon:map.lon}; $('area').hidden = true; aircraft.clear(); listDirty = dirty = true; poll(); });
+function requery(p){ query = {lat:p.lat, lon:p.lon}; updateShapes(); }
+$('area').addEventListener('click', () => { requery(center()); $('area').hidden = true; aircraft.clear(); updateMarkers(); listDirty = true; renderSheet(); poll(); });
 
 /* ---------- location ---------- */
 let watchId = null, lastQueryMove = 0;
 function startGeo(){
-  if(!('geolocation' in navigator)){ geoState='unavailable'; listDirty=true; return; }
-  geoState = 'asking'; listDirty = true; updateLocBtn();
+  if(!('geolocation' in navigator)){ geoState='unavailable'; listDirty=true; renderSheet(); return; }
+  geoState = 'asking'; listDirty = true; renderSheet(); updateLocBtn();
   if(watchId!=null) navigator.geolocation.clearWatch(watchId);
   watchId = navigator.geolocation.watchPosition(onPos, onPosErr, {enableHighAccuracy:true, maximumAge:2000, timeout:20000});
 }
 function onPos(p){
-  const first = !me;
-  const c = p.coords;
+  const first = !me, c = p.coords;
   me = {lat:c.latitude, lon:c.longitude, acc:c.accuracy, spd:c.speed ?? 0, hdg:(c.heading!=null && !isNaN(c.heading)) ? c.heading : (me && me.hdg), t:Date.now()};
   geoState = 'on';
-  if(first){ follow='me'; map.z = Math.max(map.z, 10); updateLocBtn(); }
+  if(first){ follow='me'; updateLocBtn(); gl.jumpTo({center:[me.lon,me.lat], zoom:Math.max(gl.getZoom(), 10)}); }
+  else if(follow==='me') gl.easeTo({center:[me.lon,me.lat], duration:900, essential:true});
   if(follow==='me' || first){
     if(first || dist(me, query) > Math.min(S.range*1852*0.15, 8000) || Date.now()-lastQueryMove > 60000){
-      query = {lat:me.lat, lon:me.lon}; lastQueryMove = Date.now();
+      requery(me); lastQueryMove = Date.now();
       if(first) poll();
     }
   }
   const sp = $('speed'), v = fmtSpdUser(Math.max(0,me.spd||0));
   sp.hidden = c.speed == null;
   $('spdv').textContent = v[0]; $('spdu').textContent = v[1] + (me.spd>1.5 && me.hdg!=null ? ' · '+compass(me.hdg) : '');
-  dirty = listDirty = true; checkArea();
+  updateMe(); updateShapes(); listDirty = true; checkArea();
 }
 function onPosErr(err){
-  if(err.code===1){ geoState='denied'; follow = follow==='me'?'none':follow; }
+  if(err.code===1){ geoState='denied'; if(follow==='me') follow='none'; }
   else if(!me) geoState='unavailable';
-  updateLocBtn(); listDirty = true;
+  updateLocBtn(); listDirty = true; renderSheet();
 }
 function updateLocBtn(){
   const on = follow==='me';
   $('locIco').innerHTML = `<path d="M20.5 3.5 3.8 10.4c-.8.3-.7 1.4.1 1.6l6.6 1.5 1.5 6.6c.2.8 1.3.9 1.6.1L20.5 3.5Z" fill="${on?'currentColor':'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>`;
-  $('btnLoc').setAttribute('aria-pressed', on);
+  $('btnLoc').setAttribute('aria-pressed', String(on));
 }
 $('btnLoc').addEventListener('click', () => {
   if(!me){ startGeo(); return; }
-  follow = 'me'; query = {lat:me.lat, lon:me.lon}; lastQueryMove = Date.now();
-  map.z = Math.max(map.z, 9); updateLocBtn(); $('area').hidden = true; dirty = true; poll();
+  follow = 'me'; requery(me); lastQueryMove = Date.now();
+  gl.easeTo({center:[me.lon,me.lat], zoom:Math.max(gl.getZoom(), 9), duration:700});
+  updateLocBtn(); $('area').hidden = true; poll();
 });
 
 /* ---------- menu ---------- */
 function toggleMenu(show){
   const m = $('menu'); m.hidden = !(show ?? m.hidden);
-  for(const seg of m.querySelectorAll('.seg')) for(const b of seg.children) b.setAttribute('aria-pressed', String(S[seg.dataset.k])===b.dataset.v);
+  for(const seg of m.querySelectorAll('.seg')) for(const b of seg.children) b.setAttribute('aria-pressed', String(String(S[seg.dataset.k])===b.dataset.v));
 }
 $('btnMenu').addEventListener('click', () => toggleMenu());
 $('menu').addEventListener('click', e => {
@@ -534,9 +477,9 @@ $('menu').addEventListener('click', e => {
   const k = b.parentElement.dataset.k, v = b.dataset.v;
   S[k] = k==='range' ? +v : v; store.set(k, v);
   if(k==='theme') applyTheme();
-  if(k==='range'){ aircraft.clear(); poll(); }
+  if(k==='range'){ updateShapes(); aircraft.clear(); updateMarkers(); poll(); }
   if(k==='units' && me) onPos({coords:{latitude:me.lat,longitude:me.lon,accuracy:me.acc,speed:me.spd,heading:me.hdg}});
-  toggleMenu(true); dirty = listDirty = true; renderSheet();
+  toggleMenu(true); listDirty = true; renderSheet();
 });
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
@@ -567,8 +510,7 @@ function headUp(e){
   sheet.classList.remove('drag');
   if(!sd.moved){ setSnap(snap==='peek'?'half':'peek'); sd=null; return; }
   const cur = sd.t0 + (e.clientY - sd.y), v = (e.clientY - sd.y)/Math.max(1,performance.now()-sd.t);
-  const opts = ['full','half','peek'].map(n => [n, snapY(n)]);
-  let best = opts.reduce((a,b) => Math.abs(b[1]-cur) < Math.abs(a[1]-cur) ? b : a)[0];
+  let best = ['full','half','peek'].map(n => [n, snapY(n)]).reduce((a,b) => Math.abs(b[1]-cur) < Math.abs(a[1]-cur) ? b : a)[0];
   if(v < -0.5) best = snap==='peek' ? 'half' : 'full';
   if(v > 0.5) best = snap==='full' ? 'half' : 'peek';
   setSnap(best); sd = null;
@@ -582,12 +524,13 @@ function select(hex, fromMap){
   selected = hex; selCache = aircraft.get(hex) || null;
   if(follow==='ac') follow='none';
   $('q').blur(); setSnap('half');
-  dirty = listDirty = true; renderSheet();
+  listDirty = true; updateMarkers(); renderSheet();
   if(!fromMap && selCache){
-    const p = livePos(selCache, performance.now()); map.lat = p.lat; map.lon = p.lon; map.z = Math.max(map.z, 10); breakFollow();
+    const p = livePos(selCache, performance.now()); breakFollow();
+    gl.easeTo({center:[p.lon,p.lat], zoom:Math.max(gl.getZoom(), 10), duration:600});
   }
 }
-function deselect(){ selected = null; selCache = null; if(follow==='ac'){follow='none';} setSnap('peek'); dirty = listDirty = true; updateLocBtn(); }
+function deselect(){ selected = null; selCache = null; if(follow==='ac') follow='none'; setSnap('peek'); listDirty = true; updateMarkers(); updateLocBtn(); renderSheet(); }
 
 /* ---------- sheet content ---------- */
 const body = $('body');
@@ -601,14 +544,13 @@ function rowHtml(a, o){
 }
 function statusLine(){
   const live = $('live'), t = $('statusTxt');
-  if(!feed.at){ live.className='live bad'; t.textContent = feed.err ? 'Can’t reach the flight feeds. Retrying…' : 'Connecting to flight feed…'; return; }
+  if(!feed.at){ live.className='live bad'; t.textContent = !feed.err ? 'Connecting to flight feed…' : relayDead ? 'Flights need the Sky Radar server (see README). Retrying…' : 'Can’t reach the flight feeds. Retrying…'; return; }
   live.className = 'live' + (feed.ok ? '' : ' bad');
-  const n = aircraft.size;
-  t.textContent = `${n} aircraft within ${S.range} nm · ${feed.ok ? 'Updated '+ago(Date.now()-feed.at) : 'Feed lost, retrying'}`;
+  t.textContent = `${aircraft.size} aircraft within ${S.range} nm · ${feed.ok ? 'Updated '+ago(Date.now()-feed.at) : 'Feed lost, retrying'}`;
 }
 function geoCard(){
   if(geoState==='on') return '';
-  if(geoState==='denied') return `<div class="cta"><p>Location is off for this site. Turn it on in Settings › Privacy › Location Services › Safari Websites, then tap the arrow. You can still browse by moving the map.</p></div>`;
+  if(geoState==='denied') return `<div class="cta"><p>Location is off for this site. Turn it on in your browser’s settings, then tap the arrow. You can still browse by moving the map.</p></div>`;
   if(geoState==='unavailable') return `<div class="cta"><p>Your position isn’t available yet. Showing aircraft around the map center.</p><button class="btn" data-geo>Try Again</button></div>`;
   if(geoState==='asking') return `<div class="cta"><p>Waiting for your location…</p></div>`;
   return `<div class="cta"><p>Share your location to see the aircraft around you as you move.</p><button class="btn pri" data-geo>Use My Location</button></div>`;
@@ -623,7 +565,7 @@ function renderSheet(){
   list.sort((a,b) => (b.em-a.em) || (a.ground-b.ground) || dist(o,a)-dist(o,b));
   let h = geoCard();
   h += `<div class="sec">${q ? 'Results' : 'Nearby Aircraft'}</div>`;
-  if(!list.length) h += `<div class="empty">${!feed.at ? 'Loading aircraft…' : q ? 'No aircraft match “'+esc($('q').value.trim())+'”.' : 'No aircraft are broadcasting in this area right now.'}</div>`;
+  if(!list.length) h += `<div class="empty">${!feed.at ? (feed.err ? 'Waiting for the flight feed…' : 'Loading aircraft…') : q ? 'No aircraft match “'+esc($('q').value.trim())+'”.' : 'No aircraft are broadcasting in this area right now.'}</div>`;
   else h += `<div class="group">${list.slice(0,80).map(a => rowHtml(a,o)).join('')}</div>`;
   h += `<p class="foot">Live ADS-B positions from community receivers, refreshed every 8 seconds and extrapolated between updates. Aircraft without ADS-B transponders, and some military flights, don’t appear.</p>`;
   const st = body.scrollTop; body.innerHTML = h; body.scrollTop = st;
@@ -670,13 +612,14 @@ function renderDetail(){
 body.addEventListener('click', e => {
   const pick = e.target.closest('[data-pick]'); if(pick){ select(pick.dataset.pick, false); return; }
   if(e.target.closest('[data-close]')){ deselect(); return; }
-  if(e.target.closest('[data-follow]')){ follow = follow==='ac' ? 'none' : 'ac'; updateLocBtn(); dirty = true; renderDetail(); return; }
+  if(e.target.closest('[data-follow]')){ follow = follow==='ac' ? 'none' : 'ac'; updateLocBtn(); renderDetail(); return; }
   if(e.target.closest('[data-geo]')){ startGeo(); }
 });
 
 /* ---------- boot ---------- */
-applyTheme(); updateLocBtn();
-requestAnimationFrame(() => { setSnap('peek'); });
+applyTheme(); updateLocBtn(); updateShapes();
+requestAnimationFrame(() => setSnap('peek'));
+setInterval(updateMarkers, 250);
 setInterval(() => { listDirty = true; renderSheet(); }, 2000);
 setInterval(statusLine, 1000);
 document.addEventListener('visibilitychange', () => { if(!document.hidden) poll(); });
@@ -688,8 +631,8 @@ document.addEventListener('visibilitychange', () => { if(!document.hidden) poll(
   }catch{}
   listDirty = true; renderSheet();
 })();
-renderSheet(); poll(); requestAnimationFrame(frame);
-window.__skyradar = {map, get aircraft(){return aircraft}, select, get feed(){return feed}};
+renderSheet(); poll();
+window.__skyradar = {gl, get aircraft(){return aircraft}, select, get feed(){return feed}};
 })();
 </script>
 </body>
